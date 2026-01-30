@@ -15,7 +15,7 @@ I measured two things:
 
 I ran each test 10 times and took the average. Here is what I found:
 
-![Performance Results](performance_results.png)
+![Performance Results](performace_results.png)
 
 ## What Does This Mean?
 
