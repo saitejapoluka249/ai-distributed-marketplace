@@ -6,10 +6,10 @@ def start():
     try:
         client.connect()
     except Exception as e:
-        print(f"[-] Could not connect to Buyer Server: {e}")
+        print(f"[-] Could not able to connect to Buyer Server: {e}")
         return
 
-    sid = None 
+    sess_id = None 
     
     while True:
         print("\n=== BUYER MENU ===")
@@ -26,89 +26,89 @@ def start():
         print("11. Save Cart")
         print("12. Logout")
         
-        choice = input("Enter choice: ")
+        menu_option = input("Enter choice: ")
         msg = None
 
-        if choice == "1":
+        if menu_option == "1":
             u = input("Username: ")
             p = input("Password: ")
             msg = f"CREATE_ACCOUNT|{u}|{p}"
-        elif choice == "2":
+        elif menu_option == "2":
             u = input("Username: ")
             p = input("Password: ")
             msg = f"LOGIN|{u}|{p}"
-        elif choice == "3":
-            if not sid: print("Login first!"); continue
+        elif menu_option == "3":
+            if not sess_id: print("Login first!"); continue
             cat = input("Category ID (Int): ")
             kw = input("Keywords (comma sep): ")
-            msg = f"SEARCH|{sid}|{cat}|{kw}"
-        elif choice == "4":
-            if not sid: print("Login first!"); continue
+            msg = f"SEARCH|{sess_id}|{cat}|{kw}"
+        elif menu_option == "4":
+            if not sess_id: print("Login first!"); continue
             iid = input("Item ID: ")
             qty = input("Quantity: ")
-            msg = f"ADD_TO_CART|{sid}|{iid}|{qty}"
-        elif choice == "5":
-            if not sid: print("Login first!"); continue
+            msg = f"ADD_TO_CART|{sess_id}|{iid}|{qty}"
+        elif menu_option == "5":
+            if not sess_id: print("Login first!"); continue
             iid = input("Item ID: ")
             qty = input("Quantity to Remove: ")
-            msg = f"REMOVE_FROM_CART|{sid}|{iid}|{qty}"
-        elif choice == "6":
-            if not sid: print("Login first!"); continue
-            msg = f"CLEAR_CART|{sid}"
-        elif choice == "7":
-            if not sid: print("Login first!"); continue
-            msg = f"DISPLAY_CART|{sid}"
-        elif choice == "8":
-            if not sid: print("Login first!"); continue
+            msg = f"REMOVE_FROM_CART|{sess_id}|{iid}|{qty}"
+        elif menu_option == "6":
+            if not sess_id: print("Login first!"); continue
+            msg = f"CLEAR_CART|{sess_id}"
+        elif menu_option == "7":
+            if not sess_id: print("Login first!"); continue
+            msg = f"DISPLAY_CART|{sess_id}"
+        elif menu_option == "8":
+            if not sess_id: print("Login first!"); continue
             iid = input("Item ID: ")
             vote = input("Vote (up/down): ")
-            msg = f"PROVIDE_FEEDBACK|{sid}|{iid}|{vote}"
-        elif choice == "9":
-            if not sid: print("Login first!"); continue
+            msg = f"PROVIDE_FEEDBACK|{sess_id}|{iid}|{vote}"
+        elif menu_option == "9":
+            if not sess_id: print("Login first!"); continue
             seller_id = input("Seller ID (Int): ")
-            msg = f"GET_SELLER_RATING|{sid}|{seller_id}"
-        elif choice == "10":
-            if not sid: print("Login first!"); continue
-            msg = f"GET_HISTORY|{sid}"
-        elif choice == "11":
-            if not sid: print("Login first!"); continue
-            msg = f"SAVE_CART|{sid}"
-        elif choice == "12":
-            if sid: msg = f"LOGOUT|{sid}"
+            msg = f"GET_SELLER_RATING|{sess_id}|{seller_id}"
+        elif menu_option == "10":
+            if not sess_id: print("Login first!"); continue
+            msg = f"GET_HISTORY|{sess_id}"
+        elif menu_option == "11":
+            if not sess_id: print("Login first!"); continue
+            msg = f"SAVE_CART|{sess_id}"
+        elif menu_option == "12":
+            if sess_id: msg = f"LOGOUT|{sess_id}"
             else: break
         else:
             print("Invalid choice.")
             continue
 
-        if not msg and choice == "12": break 
+        if not msg and menu_option == "12": break 
 
         if msg:
             resp = client.send_receive(msg)
             
             if not resp or "FAIL|Connection Error" in resp:
-                print("[-] Server Disconnected.")
+                print("[-] Server Got Disconnected.")
                 break
 
-            if choice == "2" and "SUCCESS" in resp:
-                sid = resp.split("|")[1]
-                print(f"[+] Login Successful! Session ID: {sid}")
-            elif choice == "7" and "SUCCESS" in resp:
+            if menu_option == "2" and "SUCCESS" in resp:
+                sess_id = resp.split("|")[1]
+                print(f"[+] Login Successful! Session ID: {sess_id}")
+            elif menu_option == "7" and "SUCCESS" in resp:
                 try:
                     data = json.loads(resp.split("|")[1])
                     print("Your Cart:", data.get('cart', []))
                 except: print("Error parsing cart.")
-            elif choice == "9" and "SUCCESS" in resp:
+            elif menu_option == "9" and "SUCCESS" in resp:
                 try:
                     data = json.loads(resp.split("|")[1])
                     if 'feedback' in data: print("Feedback:", data['feedback'])
                 except: print("Error parsing feedback.")
-            elif choice == "10" and "SUCCESS" in resp:
+            elif menu_option == "10" and "SUCCESS" in resp:
                 try:
                     data = json.loads(resp.split("|")[1])
                     print("Purchase History:", data.get('purchase_history', []))
                 except: print("Error parsing history.")
-            elif choice == "12":
-                sid = None
+            elif menu_option == "12":
+                sess_id = None
                 print("Logged out.")
                 break
             else:

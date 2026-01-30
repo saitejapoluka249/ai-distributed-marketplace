@@ -4,17 +4,17 @@ import random
 import string
 from common.tcp_base import TCPClient
 
-BUYER_SERVER_ADDR = ('localhost', 8001)
-SELLER_SERVER_ADDR = ('localhost', 8000)
-NUM_REQUESTS_PER_CLIENT = 1000  
-NUM_RUNS = 10  
+BUYER_SERVER_ADDRESS = ('localhost', 8001)
+SELLER_SERVER_ADDRESS = ('localhost', 8000)
+NUMBER_OF_REQUESTS_PER_CLIENT = 1000  
+NUMBER_OF_RUNS = 10  
 
 def generate_random_str(length=8):
     return ''.join(random.choices(string.ascii_letters, k=length))
 
 def run_buyer_session(client_id, latencies, lock):
     """Simulates a single buyer using the robust TCPClient."""
-    client = TCPClient(BUYER_SERVER_ADDR[0], BUYER_SERVER_ADDR[1])
+    client = TCPClient(BUYER_SERVER_ADDRESS[0], BUYER_SERVER_ADDRESS[1])
     try:
         client.connect()
         
@@ -30,7 +30,7 @@ def run_buyer_session(client_id, latencies, lock):
         
         sid = resp.split("|")[1]
         
-        for i in range(NUM_REQUESTS_PER_CLIENT):
+        for i in range(NUMBER_OF_REQUESTS_PER_CLIENT):
             start = time.perf_counter() 
             resp = client.send_receive(f"SEARCH|{sid}|1|shoes") 
             
@@ -48,7 +48,7 @@ def run_buyer_session(client_id, latencies, lock):
 
 def run_seller_session(client_id, latencies, lock):
     """Simulates a single seller using the robust TCPClient."""
-    client = TCPClient(SELLER_SERVER_ADDR[0], SELLER_SERVER_ADDR[1])
+    client = TCPClient(SELLER_SERVER_ADDRESS[0], SELLER_SERVER_ADDRESS[1])
     try:
         client.connect()
         
@@ -64,7 +64,7 @@ def run_seller_session(client_id, latencies, lock):
 
         sid = resp.split("|")[1]
         
-        for i in range(NUM_REQUESTS_PER_CLIENT):
+        for i in range(NUMBER_OF_REQUESTS_PER_CLIENT):
             start = time.perf_counter()
             resp = client.send_receive(f"GET_RATING|{sid}")
             
@@ -104,39 +104,39 @@ def run_batch(num_buyers, num_sellers, run_idx):
     end_time_global = time.perf_counter()
     total_duration = end_time_global - start_time_global
     
-    total_ops = len(latencies)
-    avg_response_time = (sum(latencies) / total_ops) * 1000 if total_ops > 0 else 0
-    throughput = total_ops / total_duration if total_duration > 0 else 0
+    total_opts = len(latencies)
+    average_resp_time = (sum(latencies) / total_opts) * 1000 if total_opts > 0 else 0
+    throughput = total_opts / total_duration if total_duration > 0 else 0
     
-    print(f"   Run {run_idx+1}: {avg_response_time:.2f} ms | {throughput:.2f} ops/sec")
+    print(f"   Run {run_idx+1}: {average_resp_time:.2f} ms | {throughput:.2f} ops/sec")
     
-    return avg_response_time, throughput
+    return average_resp_time, throughput
 
-def run_scenario(num_buyers, num_sellers):
+def run_scenarios(num_buyers, num_sellers):
     """Runs the experiment multiple times and calculates average."""
     print(f"\n=======================================================")
-    print(f"SCENARIO: {num_buyers} Buyers, {num_sellers} Sellers | {NUM_RUNS} Runs")
+    print(f"SCENARIO: {num_buyers} Buyers, {num_sellers} Sellers | {NUMBER_OF_RUNS} Runs")
     print(f"=======================================================")
     
-    scenario_latencies = []
-    scenario_throughputs = []
+    scenarios_latency = []
+    scenarios_throughput = []
     
-    for i in range(NUM_RUNS):
+    for i in range(NUMBER_OF_RUNS):
         lat, thr = run_batch(num_buyers, num_sellers, i)
-        scenario_latencies.append(lat)
-        scenario_throughputs.append(thr)
+        scenarios_latency.append(lat)
+        scenarios_throughput.append(thr)
         time.sleep(1) # Short cooldown between runs
         
-    avg_lat = sum(scenario_latencies) / len(scenario_latencies)
-    avg_thr = sum(scenario_throughputs) / len(scenario_throughputs)
+    avg_lat = sum(scenarios_latency) / len(scenarios_latency)
+    avg_thr = sum(scenarios_throughput) / len(scenarios_throughput)
     
     print(f"-------------------------------------------------------")
     print(f"FINAL AVERAGE >> Latency: {avg_lat:.2f} ms | Throughput: {avg_thr:.2f} ops/sec")
     print(f"-------------------------------------------------------\n")
 
 if __name__ == "__main__":
-    run_scenario(1, 1)
+    run_scenarios(1, 1)
     
-    run_scenario(10, 10)
+    run_scenarios(10, 10)
 
-    run_scenario(100, 100)
+    run_scenarios(100, 100)

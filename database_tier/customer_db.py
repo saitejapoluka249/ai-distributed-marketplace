@@ -36,9 +36,9 @@ def handle_client(conn, addr):
         if not msg: break
         
         parts = msg.split("|")
-        cmd = parts[0]
+        req_type = parts[0]
         
-        if cmd == "REGISTER":
+        if req_type == "REGISTER":
             role, user, pwd = parts[1], parts[2], parts[3]
             if user in users:
                 send_msg(conn, "FAIL|User exists")
@@ -51,15 +51,15 @@ def handle_client(conn, addr):
                     users[user] = create_buyer(user, pwd, uid)
                 send_msg(conn, f"SUCCESS|{uid}")
 
-        elif cmd == "LOGIN":
+        elif req_type == "LOGIN":
             user, pwd = parts[1], parts[2]
             if users.get(user) and users[user]['password'] == pwd:
                 send_msg(conn, "SUCCESS")
             else:
                 send_msg(conn, "FAIL|Invalid credentials")
         
-        elif cmd == "SAVE_SESSION":
-            sid, user = parts[1], parts[2]
+        elif req_type == "SAVE_SESSION":
+            sess_id, user = parts[1], parts[2]
             session_data = {
                 "user": user,
                 "last_active": time.time()
@@ -68,45 +68,45 @@ def handle_client(conn, addr):
             if users[user]['role'] == "BUYER":
                 session_data['cart'] = copy.deepcopy(users[user]['saved_cart'])
             
-            sessions[sid] = session_data
+            sessions[sess_id] = session_data
             send_msg(conn, "SUCCESS")
 
-        elif cmd == "VALIDATE_SESSION":
-            sid = parts[1]
-            if sid in sessions:
-                if (time.time() - sessions[sid]['last_active']) > 300: 
-                    del sessions[sid] 
+        elif req_type == "VALIDATE_SESSION":
+            sess_id = parts[1]
+            if sess_id in sessions:
+                if (time.time() - sessions[sess_id]['last_active']) > 300: 
+                    del sessions[sess_id] 
                     send_msg(conn, "FAIL|Session Expired")
                 else:
-                    sessions[sid]['last_active'] = time.time()
-                    send_msg(conn, f"SUCCESS|{sessions[sid]['user']}")
+                    sessions[sess_id]['last_active'] = time.time()
+                    send_msg(conn, f"SUCCESS|{sessions[sess_id]['user']}")
             else:
                 send_msg(conn, "FAIL|Invalid Session")
 
-        elif cmd == "LOGOUT":
-            sid = parts[1]
-            if sid in sessions:
-                del sessions[sid]
+        elif req_type == "LOGOUT":
+            sess_id = parts[1]
+            if sess_id in sessions:
+                del sessions[sess_id]
             send_msg(conn, "SUCCESS")
 
-        elif cmd == "SAVE_CART":
-            sid = parts[1]
-            if sid in sessions:
-                user = sessions[sid]['user']
-                users[user]['saved_cart'] = copy.deepcopy(sessions[sid]['cart'])
+        elif req_type == "SAVE_CART":
+            sess_id = parts[1]
+            if sess_id in sessions:
+                user = sessions[sess_id]['user']
+                users[user]['saved_cart'] = copy.deepcopy(sessions[sess_id]['cart'])
                 send_msg(conn, "SUCCESS")
             else:
                 send_msg(conn, "FAIL")
 
-        elif cmd == "GET_CART": 
-            sid = parts[1]
-            if sid in sessions:
-                cart_data = {"cart": sessions[sid].get('cart', [])}
+        elif req_type == "GET_CART": 
+            sess_id = parts[1]
+            if sess_id in sessions:
+                cart_data = {"cart": sessions[sess_id].get('cart', [])}
                 send_msg(conn, f"SUCCESS|{json.dumps(cart_data)}")
             else:
                 send_msg(conn, "FAIL")
 
-        elif cmd == "GET_USER_DATA":
+        elif req_type == "GET_USER_DATA":
             target = parts[1]
             found = None
             if target in users: found = users[target]
@@ -119,11 +119,11 @@ def handle_client(conn, addr):
             if found: send_msg(conn, f"SUCCESS|{json.dumps(found)}")
             else: send_msg(conn, "FAIL|User not found")
 
-        elif cmd == "CART_OP":
-            sid, op = parts[1], parts[2]
+        elif req_type == "CART_OP":
+            sess_id, op = parts[1], parts[2]
             
-            if sid in sessions:
-                cart = sessions[sid].get('cart', []) 
+            if sess_id in sessions:
+                cart = sessions[sess_id].get('cart', []) 
                 
                 if op == "add":
                     item_id, qty = parts[3], int(parts[4])
@@ -145,12 +145,12 @@ def handle_client(conn, addr):
                 elif op == "clear":
                     cart = []
                 
-                sessions[sid]['cart'] = cart 
+                sessions[sess_id]['cart'] = cart 
                 send_msg(conn, "SUCCESS")
             else:
                 send_msg(conn, "FAIL")
                 
-        elif cmd == "UPDATE_FEEDBACK":
+        elif req_type == "UPDATE_FEEDBACK":
             target, type_ = parts[1], parts[2]
             if target in users:
                 if type_ == "up": users[target]['feedback']['up'] += 1
@@ -162,7 +162,7 @@ def handle_client(conn, addr):
 
 def main():
     server = TCPServer.start_listening(5001)
-    print("[DATABASE] Customer DB online on 5001...")
+    print("[DATABASE] Customer DB running on 5001...")
     while True:
         conn, addr = server.accept()
         threading.Thread(target=handle_client, args=(conn, addr), daemon=True).start()
