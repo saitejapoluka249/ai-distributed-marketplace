@@ -1,7 +1,6 @@
 from common.tcp_base import TCPClient
 
 def start():
-    # 1. Setup Persistent Connection
     client = TCPClient('localhost', 8000)
     try:
         client.connect()
@@ -25,7 +24,6 @@ def start():
         choice = input("Select: ")
         msg = None
 
-        # --- Input Logic ---
         if choice == "1":
             u = input("Username: ")
             p = input("Password: ")
@@ -70,23 +68,18 @@ def start():
 
         if not msg and choice == "8": break
 
-        # --- Clean Communication Block ---
         if msg:
-            # Use the Persistent Class Method
             resp = client.send_receive(msg)
 
-            # Handle Connection Loss
             if not resp or "FAIL|Connection Error" in resp:
                 print("[-] Server Disconnected.")
                 break
 
-            # Handle Responses
             if choice == "2" and "SUCCESS" in resp:
                 sid = resp.split("|")[1]
                 print(f"[+] Logged in. Session ID: {sid}")
             elif choice == "6" and "SUCCESS" in resp:
                 print("--- My Items ---")
-                # Clean up the output if it's JSON or list
                 print(resp.replace("SUCCESS|", "")) 
             elif choice == "7" and "SUCCESS" in resp:
                 print("Rating:", resp.replace("SUCCESS|", ""))

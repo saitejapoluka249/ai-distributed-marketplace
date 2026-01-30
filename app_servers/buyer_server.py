@@ -4,23 +4,18 @@ import json
 from common.protocol import send_msg, recv_msg
 from common.tcp_base import TCPServer, TCPClient
 
-# REMOVED GLOBAL CONNECTIONS HERE to prevent race conditions
 
 def handle_client(conn, addr):
-    # --- FIX: Create unique DB connections for THIS specific thread ---
-    # This ensures 100 threads can talk to the DB in parallel without mixing data.
     cust_db = TCPClient('localhost', 5001)
     cust_db.connect()
     
     prod_db = TCPClient('localhost', 5002)
     prod_db.connect()
-    # ------------------------------------------------------------------
 
     print(f"[NEW CONNECTION] {addr}")
 
     try:
         while True:
-            # We still use recv_msg(conn) because 'conn' is a raw socket from the user
             msg = recv_msg(conn)
             if not msg: break
             
@@ -28,7 +23,6 @@ def handle_client(conn, addr):
             cmd = parts[0]
 
             if cmd == "CREATE_ACCOUNT":
-                # Use the local 'cust_db', not the global one
                 resp = cust_db.send_receive(f"REGISTER|BUYER|{parts[1]}|{parts[2]}")
                 send_msg(conn, resp)
 
@@ -152,7 +146,6 @@ def handle_client(conn, addr):
                 send_msg(conn, resp)
 
     finally:
-        # Cleanup: Close this thread's unique DB connections
         cust_db.close()
         prod_db.close()
         conn.close()

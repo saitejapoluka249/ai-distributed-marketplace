@@ -2,7 +2,6 @@ import json
 from common.tcp_base import TCPClient
 
 def start():
-    # 1. Setup Persistent Connection
     client = TCPClient('localhost', 8001)
     try:
         client.connect()
@@ -30,7 +29,6 @@ def start():
         choice = input("Enter choice: ")
         msg = None
 
-        # --- Input Logic ---
         if choice == "1":
             u = input("Username: ")
             p = input("Password: ")
@@ -66,7 +64,6 @@ def start():
             vote = input("Vote (up/down): ")
             msg = f"PROVIDE_FEEDBACK|{sid}|{iid}|{vote}"
         elif choice == "9":
-            # Added SID check here for consistency
             if not sid: print("Login first!"); continue
             seller_id = input("Seller ID (Int): ")
             msg = f"GET_SELLER_RATING|{sid}|{seller_id}"
@@ -85,17 +82,13 @@ def start():
 
         if not msg and choice == "12": break 
 
-        # --- The Cleaned Communication Block ---
         if msg:
-            # Use the Persistent Class Method
             resp = client.send_receive(msg)
             
-            # Handle Connection Loss
             if not resp or "FAIL|Connection Error" in resp:
                 print("[-] Server Disconnected.")
                 break
 
-            # Handle Responses
             if choice == "2" and "SUCCESS" in resp:
                 sid = resp.split("|")[1]
                 print(f"[+] Login Successful! Session ID: {sid}")
