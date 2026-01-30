@@ -2,7 +2,7 @@
 
 ## How I Tested It
 
-I ran these tests on my MacBook Air (M-Series chip). Since I don't have multiple computers, I ran everything on `localhost` (my own machine) to simulate the network.
+I ran these tests on my MacBook Air (M-Series chip). I ran everything on `localhost` (my own machine) to simulate the network.
 
 I wrote a script called `evaluation.py` that automatically launches buyers and sellers at the same time. Each buyer or seller logs in and does 1,000 operations (like searching for items or checking ratings).
 
