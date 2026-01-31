@@ -17,22 +17,37 @@ I ran each test 10 times and took the average. Here is what I found:
 
 ![Performance Results](performace_results.png)
 
-## What Does This Mean?
+## Scenarios
 
 ### Scenario 1: Just 2 Users (1 Buyer, 1 Seller)
 
-This was obviously the fastest. The response time was super low (0.20 ms) because the computer didn't have to multitask. There was no waiting in line for the database. Also, because I used persistent connections (keeping the pipe open), the system didn't waste time reconnecting over and over. **The throughput was huge (over 9,600 ops/sec) because the server could dedicate 100% of its power to just these two clients.**
+This was obviously the fastest. The response time was super low (0.20 ms) because the computer didn't have to multitask. There was no waiting in line for the database. Also, because I used persistent connections (keeping the pipe open), the system didn't waste time reconnecting over and over. The throughput was huge (over 9,600 ops/sec) because the server could dedicate 100% of its power to just these two clients.
 
 ### Scenario 2: 20 Users (10 Buyers, 10 Sellers)
 
-The response time went up a little bit to 2.36 ms, and the **throughput dropped to ~8,074 ops/sec**. This happened because my computer had to start switching back and forth between 20 different threads (context switching). Even though 20 users isn't a lot, the "overhead" of managing them and making them wait for the database lock slowed the total speed down slightly compared to the single-user test.
+The response time went up a little bit to 2.36 ms, and the throughput dropped to ~8,074 ops/sec. This happened because my computer had to start switching back and forth between 20 different threads (context switching). Even though 20 users isn't a lot, the "overhead" of managing them slowed the total speed down slightly compared to the single-user test.
 
 ### Scenario 3: 200 Users (100 Buyers, 100 Sellers)
 
 The response time jumped to about 29 ms. This makes sense because when 200 people ask for something at once, a line forms, and requests have to wait their turn.
 
-In this test, the **Throughput dropped further to ~6,800 ops/sec**. This happened because the system was under heavy stress. With 200 active threads, they started "fighting" over the database lock. The computer spent more time managing the traffic and waiting for the lock to open than actually processing the requests, which caused the overall speed to slow down.
+In this test, the Throughput dropped further to ~6,800 ops/sec. This happened because the system was under heavy stress. With 200 active threads, the computer spent more time managing the traffic and switching between tasks than actually processing the requests, which caused the overall speed to slow down.
+
+## Debugging & Challenges
+
+While running the evaluation script, I ran into two major issues that I had to fix:
+
+1. **"Broken Pipe" Errors (Port Exhaustion):**
+* **Issue:** At first, my code tried to open and close a new socket for every single request. When running 200 concurrent users, my computer ran out of available ports, causing the test to crash with `OSError: Broken pipe`.
+* **Solution:** I switched to Persistent Connections. Now, each client connects only once, sends all 1,000 requests over the same wire, and disconnects at the end. This eliminated the overhead and stopped the crashes.
+
+
+2. **Data Corruption due to Thread Safety:**
+* **Issue:** Initially, I used a single global TCP client variable in my server to connect to the database. When multiple threads tried to use this same socket at the exact same time, the messages got mixed up (interleaved), causing JSON parsing errors and connection failures.
+* **Solution:** I changed the design to use Thread-Local Connections. Now, every time a new client thread starts, it creates its own private TCP connection to the database. This ensures that threads never fight over the same socket, keeping the data clean and safe.
+
+
 
 ## Conclusion
 
-Overall, the system works well. It successfully handled 200 concurrent users without crashing. Although the speed slowed down a bit under maximum load (which is expected due to lock contention), it still processed over 6,800 operations per second, proving that the multi-threaded design is stable.
+Overall, the system works well. It successfully handled 200 concurrent users without crashing. Although the speed slowed down a bit under maximum load (which is expected due to context switching), it still processed over 6,800 operations per second, proving that the multi-threaded design is stable.
