@@ -1,6 +1,6 @@
 # Distributed Marketplace System
 
-## Project Description
+## PA1 Description
 
 This is a multi-threaded distributed marketplace system where multiple buyers and sellers can interact simultaneously. I built this system to demonstrate how distributed components communicate over a network using raw TCP sockets. The system allows users to create accounts, login, search for items, rate sellers, and manage a shopping cart in real-time.
 
@@ -14,7 +14,7 @@ The system follows a 3-tier architecture with the following components:
 
 
 2. **Application Tier (app_servers/):**
-* `buyer_server.py` and `seller_server.py`: These servers act as middleware. They handle business logic (like verifying passwords or checking stock) and manage communication between the clients and the databases.
+* `buyer_server.py` and `seller_server.py`: These servers act as **stateless** middleware. They do not store user state locally; instead, they validate sessions with the database for every request. They handle business logic and manage communication between the clients and the databases.
 
 
 3. **Database Tier (database_tier/):**
@@ -28,20 +28,25 @@ The system follows a 3-tier architecture with the following components:
 * **Concurrency:** The system uses Python's `threading` module to handle multiple concurrent client connections without blocking.
 * **Persistent Connections:** To improve performance, I implemented persistent TCP connections. This means the client establishes a connection once and reuses it for multiple requests, significantly reducing network overhead.
 * **Custom Protocol:** All communication uses a custom application-level protocol defined in `common/protocol.py`, which uses fixed-length headers to ensure reliable message delivery.
+* **Session Expiry:** To ensure security and resource management, user sessions are designed to automatically expire after 5 minutes of inactivity.
 
 ## How to Run the System
 
-To run the full system, open 5 separate terminal windows and execute the files in the following order:
+To run the full system, open separate terminal windows and execute the files in the following order:
 
 **1. Start the Databases:**
-`python3 database_tier/customer_db.py`
-`python3 database_tier/product_db.py`
+`python3 -m database_tier.customer_db`
+`python3 -m database_tier.product_db`
 
 **2. Start the App Servers:**
-`python3 app_servers/buyer_server.py`
-`python3 app_servers/seller_server.py`
+`python3 -m app_servers.buyer_server`
+`python3 -m app_servers.seller_server`
 
-**3. Run the Evaluation Script:**
+**3. Run the Clients (For Manual Testing):**
+`python3 -m clients.buyer_client`
+`python3 -m clients.seller_client`
+
+**4. Run the Evaluation Script (For Load Testing):**
 `python3 evaluation.py`
 
 *(Note: Make sure you are in the root directory DistributedMarketplaceProject before running these commands.)*
