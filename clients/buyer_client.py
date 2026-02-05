@@ -41,16 +41,25 @@ def start():
             if not sess_id: print("Login first!"); continue
             cat = input("Category ID (Int): ")
             kw = input("Keywords (comma sep): ")
+            if not cat.isdigit():
+                print("[-] Error: Category ID must be an integer.")
+                continue
             msg = f"SEARCH|{sess_id}|{cat}|{kw}"
         elif menu_option == "4":
             if not sess_id: print("Login first!"); continue
             iid = input("Item ID: ")
             qty = input("Quantity: ")
+            if not qty.isdigit():
+                print("[-] Error: Quantity must be an integer.")
+                continue
             msg = f"ADD_TO_CART|{sess_id}|{iid}|{qty}"
         elif menu_option == "5":
             if not sess_id: print("Login first!"); continue
             iid = input("Item ID: ")
             qty = input("Quantity to Remove: ")
+            if not qty.isdigit():
+                print("[-] Error: Quantity must be an integer.")
+                continue
             msg = f"REMOVE_FROM_CART|{sess_id}|{iid}|{qty}"
         elif menu_option == "6":
             if not sess_id: print("Login first!"); continue
@@ -62,10 +71,16 @@ def start():
             if not sess_id: print("Login first!"); continue
             iid = input("Item ID: ")
             vote = input("Vote (up/down): ")
+            if vote not in ['up', 'down']:
+                print("[-] Error: Vote must be 'up' or 'down'")
+                continue
             msg = f"PROVIDE_FEEDBACK|{sess_id}|{iid}|{vote}"
         elif menu_option == "9":
             if not sess_id: print("Login first!"); continue
             seller_id = input("Seller ID (Int): ")
+            if not seller_id.isdigit():
+                print("[-] Error: Seller ID must be an integer.")
+                continue
             msg = f"GET_SELLER_RATING|{sess_id}|{seller_id}"
         elif menu_option == "10":
             if not sess_id: print("Login first!"); continue

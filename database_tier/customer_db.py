@@ -127,10 +127,25 @@ def handle_client(conn, addr):
                 
                 if op == "add":
                     item_id, qty = parts[3], int(parts[4])
-                    cart.append({'id': item_id, 'qty': qty})
+                    found = False
+                    for item in cart:
+                        if item['id'] == item_id:
+                            item['qty'] += qty
+                            found = True
+                            break
+                    
+                    if not found:
+                        cart.append({'id': item_id, 'qty': qty})
                 
                 elif op == "remove":
                     item_id, qty = parts[3], int(parts[4])
+                    current_total = 0
+                    for item in cart:
+                         if item['id'] == item_id:
+                              current_total += item['qty']
+                    if qty > current_total:
+                         send_msg(conn, "FAIL|Cannot remove more than you have")
+                         continue 
                     new_cart = []
                     for item in cart:
                         if item['id'] == item_id and qty > 0:

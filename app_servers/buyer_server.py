@@ -61,11 +61,24 @@ def handle_client(conn, addr):
                     continue
                 
                 item_details = json.loads(product_data.split("|")[1])
-                if int(item_details['quantity']) >= stock_count:
+                available_stock = int(item_details['quantity'])
+                cart_resp = cust_db.send_receive(f"GET_CART|{sess_id}")
+                existing_qty_in_cart = 0
+                if "SUCCESS" in cart_resp:
+                    cart_data = json.loads(cart_resp.split("|")[1])
+                    cart_list = cart_data.get('cart', [])
+                    
+                    for item in cart_list:
+                        if item['id'] == item_id:
+                            existing_qty_in_cart += item['qty']
+                total_desired = stock_count + existing_qty_in_cart
+                
+                if available_stock >= total_desired:
                     cust_db.send_receive(f"CART_OP|{sess_id}|add|{item_id}|{stock_count}")
                     send_msg(conn, "SUCCESS")
                 else:
-                    send_msg(conn, "FAIL|Not enough stock")
+                    msg = f"FAIL|Not enough stock. Stock: {available_stock}, In Cart: {existing_qty_in_cart}"
+                    send_msg(conn, msg)
 
             elif req_type == "REMOVE_FROM_CART":
                 sess_id, item_id, stock_count = parts[1], parts[2], parts[3]
@@ -73,8 +86,8 @@ def handle_client(conn, addr):
                 if "FAIL" in user_output:
                     send_msg(conn, "FAIL")
                     continue
-                cust_db.send_receive(f"CART_OP|{sess_id}|remove|{item_id}|{stock_count}")
-                send_msg(conn, "SUCCESS")
+                db_response = cust_db.send_receive(f"CART_OP|{sess_id}|remove|{item_id}|{stock_count}")
+                send_msg(conn, db_response)
 
             elif req_type == "CLEAR_CART":
                 sess_id = parts[1]

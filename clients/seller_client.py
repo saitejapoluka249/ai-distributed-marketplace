@@ -40,16 +40,32 @@ def start():
             cond = input("Condition (New/Used): ")
             price = input("Price: ")
             qty = input("Quantity: ")
+            if not cat.isdigit() or not qty.isdigit():
+                print("[-] Error: Category and Quantity must be integers.")
+                continue
+            try:
+                float(price) 
+            except ValueError:
+                print("[-] Error: Price must be a number.")
+                continue
             msg = f"REGISTER_ITEM|{sess_id}|{name}|{cat}|{kws}|{cond}|{price}|{qty}"
         elif menu_option == "4":
             if not sess_id: print("Login first!"); continue
             iid = input("Item ID: ")
             price = input("New Price: ")
+            try:
+                float(price)
+            except ValueError:
+                print("[-] Error: Price must be a number.")
+                continue
             msg = f"CHANGE_PRICE|{sess_id}|{iid}|{price}"
         elif menu_option == "5":
             if not sess_id: print("Login first!"); continue
             iid = input("Item ID: ")
             qty = input("Quantity to REMOVE: ")
+            if not qty.isdigit():
+                print("[-] Error: Quantity must be an integer.")
+                continue
             msg = f"UPDATE_UNITS|{sess_id}|{iid}|{qty}"
         elif menu_option == "6":
             if not sess_id: print("Login first!"); continue
