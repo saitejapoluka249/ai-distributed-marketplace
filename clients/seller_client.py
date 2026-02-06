@@ -1,3 +1,4 @@
+import time 
 from common.tcp_base import TCPClient
 
 def start():
@@ -9,6 +10,7 @@ def start():
         return
 
     sess_id = None 
+    last_active = 0 
     
     while True:
         print("\n--- SELLER INTERFACE ---")
@@ -22,6 +24,12 @@ def start():
         print("8. Logout")                  
         
         menu_option = input("Select: ")
+
+        if sess_id:
+            if (time.time() - last_active) > 300: 
+                print("\n[-] Session Expired (Timeout). Please Login again.")
+                sess_id = None
+
         msg = None
 
         if menu_option == "1":
@@ -91,8 +99,17 @@ def start():
                 print("[-] Server Disconnected.")
                 break
 
+            if "SUCCESS" in resp:
+                last_active = time.time() 
+
+            if "FAIL|Session Expired" in resp or "FAIL|Login First" in resp:
+                 print(f"[-] Server said: {resp.split('|')[1]}")
+                 if "Expired" in resp:
+                     sess_id = None
+
             if menu_option == "2" and "SUCCESS" in resp:
                 sess_id = resp.split("|")[1]
+                last_active = time.time()
                 print(f"[+] Logged in. Session ID: {sess_id}")
             elif menu_option == "6" and "SUCCESS" in resp:
                 print("--- My Items ---")

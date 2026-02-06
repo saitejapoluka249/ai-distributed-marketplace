@@ -1,4 +1,5 @@
 import json
+import time  
 from common.tcp_base import TCPClient
 
 def start():
@@ -10,6 +11,7 @@ def start():
         return
 
     sess_id = None 
+    last_active = 0 
     
     while True:
         print("\n=== BUYER MENU ===")
@@ -27,6 +29,12 @@ def start():
         print("12. Logout")
         
         menu_option = input("Enter choice: ")
+
+        if sess_id:
+            if (time.time() - last_active) > 300: # 5 Mins
+                print("\n[-] Session Expired (Timeout). Please Login again.")
+                sess_id = None
+
         msg = None
 
         if menu_option == "1":
@@ -104,8 +112,17 @@ def start():
                 print("[-] Server Got Disconnected.")
                 break
 
+            if "SUCCESS" in resp:
+                last_active = time.time() 
+
+            if "FAIL|Session Expired" in resp or "FAIL|Login First" in resp:
+                 print(f"[-] Server said: {resp.split('|')[1]}")
+                 if "Expired" in resp:
+                     sess_id = None
+
             if menu_option == "2" and "SUCCESS" in resp:
                 sess_id = resp.split("|")[1]
+                last_active = time.time()
                 print(f"[+] Login Successful! Session ID: {sess_id}")
             elif menu_option == "7" and "SUCCESS" in resp:
                 try:

@@ -7,6 +7,7 @@ from common.tcp_base import TCPServer
 
 users = {}   
 sessions = {} 
+db_lock = threading.Lock() 
 
 def create_seller(username, password, uid):
     return {
@@ -23,7 +24,8 @@ def create_buyer(username, password, uid):
         "role": "BUYER",
         "id": uid, 
         "items_purchased": 0, 
-        "saved_cart": [], 
+        "saved_cart": [],
+        "cart_version": 0, 
         "purchase_history": [] 
     }
 
@@ -40,138 +42,164 @@ def handle_client(conn, addr):
         
         if req_type == "REGISTER":
             role, user, pwd = parts[1], parts[2], parts[3]
-            if user in users:
-                send_msg(conn, "FAIL|User exists")
-            else:
-                uid = user_id_counter
-                user_id_counter += 1
-                if role == "SELLER":
-                    users[user] = create_seller(user, pwd, uid)
+            with db_lock: 
+                if user in users:
+                    send_msg(conn, "FAIL|User exists")
                 else:
-                    users[user] = create_buyer(user, pwd, uid)
-                send_msg(conn, f"SUCCESS|{uid}")
+                    uid = user_id_counter
+                    user_id_counter += 1
+                    if role == "SELLER":
+                        users[user] = create_seller(user, pwd, uid)
+                    else:
+                        users[user] = create_buyer(user, pwd, uid)
+                    send_msg(conn, f"SUCCESS|{uid}")
 
         elif req_type == "LOGIN":
             user, pwd = parts[1], parts[2]
-            if users.get(user) and users[user]['password'] == pwd:
-                send_msg(conn, "SUCCESS")
-            else:
-                send_msg(conn, "FAIL|Invalid credentials")
+            with db_lock:
+                if users.get(user) and users[user]['password'] == pwd:
+                    send_msg(conn, "SUCCESS")
+                else:
+                    send_msg(conn, "FAIL|Invalid credentials")
         
         elif req_type == "SAVE_SESSION":
             sess_id, user = parts[1], parts[2]
             session_data = {
                 "user": user,
-                "last_active": time.time()
+                "last_active": time.time(),
+                "cart": [],
+                "cart_version": 0
             }
             
-            if users[user]['role'] == "BUYER":
-                session_data['cart'] = copy.deepcopy(users[user]['saved_cart'])
+            with db_lock:
+                if users[user]['role'] == "BUYER":
+                    session_data['cart'] = [item.copy() for item in users[user]['saved_cart']]
+                    session_data['cart_version'] = users[user].get('cart_version', 0)
             
-            sessions[sess_id] = session_data
+            with db_lock:
+                sessions[sess_id] = session_data
             send_msg(conn, "SUCCESS")
 
         elif req_type == "VALIDATE_SESSION":
             sess_id = parts[1]
-            if sess_id in sessions:
-                if (time.time() - sessions[sess_id]['last_active']) > 300: 
-                    del sessions[sess_id] 
-                    send_msg(conn, "FAIL|Session Expired")
+            with db_lock:
+                if sess_id in sessions:
+                    if (time.time() - sessions[sess_id]['last_active']) > 300: 
+                        del sessions[sess_id] 
+                        send_msg(conn, "FAIL|Session Expired")
+                    else:
+                        sessions[sess_id]['last_active'] = time.time()
+                        send_msg(conn, f"SUCCESS|{sessions[sess_id]['user']}")
                 else:
-                    sessions[sess_id]['last_active'] = time.time()
-                    send_msg(conn, f"SUCCESS|{sessions[sess_id]['user']}")
-            else:
-                send_msg(conn, "FAIL|Invalid Session")
+                    send_msg(conn, "FAIL|Invalid Session")
 
         elif req_type == "LOGOUT":
             sess_id = parts[1]
-            if sess_id in sessions:
-                del sessions[sess_id]
+            with db_lock:
+                if sess_id in sessions:
+                    del sessions[sess_id]
             send_msg(conn, "SUCCESS")
 
         elif req_type == "SAVE_CART":
             sess_id = parts[1]
-            if sess_id in sessions:
-                user = sessions[sess_id]['user']
-                users[user]['saved_cart'] = copy.deepcopy(sessions[sess_id]['cart'])
-                send_msg(conn, "SUCCESS")
-            else:
-                send_msg(conn, "FAIL")
+            with db_lock:
+                if sess_id in sessions:
+                    user = sessions[sess_id]['user']
+                    users[user]['saved_cart'] = [item.copy() for item in sessions[sess_id]['cart']]
+                    new_ver = users[user].get('cart_version', 0) + 1
+                    users[user]['cart_version'] = new_ver
+                    
+                    sessions[sess_id]['cart_version'] = new_ver
+                    send_msg(conn, "SUCCESS")
+                else:
+                    send_msg(conn, "FAIL")
 
-        elif req_type == "GET_CART": 
+        elif req_type == "GET_CART":
             sess_id = parts[1]
-            if sess_id in sessions:
-                cart_data = {"cart": sessions[sess_id].get('cart', [])}
-                send_msg(conn, f"SUCCESS|{json.dumps(cart_data)}")
-            else:
-                send_msg(conn, "FAIL")
+            with db_lock:
+                if sess_id in sessions:
+                    username = sessions[sess_id]['user']
+                    
+                    saved_ver = users[username].get('cart_version', 0)
+                    local_ver = sessions[sess_id].get('cart_version', 0)
+                    
+                    if saved_ver > local_ver:
+                        sessions[sess_id]['cart'] = [item.copy() for item in users[username]['saved_cart']]
+                        sessions[sess_id]['cart_version'] = saved_ver
+
+                    local_cart = sessions[sess_id]['cart']
+                    send_msg(conn, f"SUCCESS|{json.dumps({'cart': local_cart})}")
+                else:
+                    send_msg(conn, "FAIL")
 
         elif req_type == "GET_USER_DATA":
             target = parts[1]
             found = None
-            if target in users: found = users[target]
-            else:
-                try:
-                    tid = int(target)
-                    for u in users.values(): 
-                        if u['id'] == tid: found = u; break
-                except: pass
+            with db_lock:
+                if target in users: found = users[target]
+                else:
+                    try:
+                        tid = int(target)
+                        for u in users.values(): 
+                            if u['id'] == tid: found = u; break
+                    except: pass
             if found: send_msg(conn, f"SUCCESS|{json.dumps(found)}")
             else: send_msg(conn, "FAIL|User not found")
 
         elif req_type == "CART_OP":
             sess_id, op = parts[1], parts[2]
             
-            if sess_id in sessions:
-                cart = sessions[sess_id].get('cart', []) 
-                
-                if op == "add":
-                    item_id, qty = parts[3], int(parts[4])
-                    found = False
-                    for item in cart:
-                        if item['id'] == item_id:
-                            item['qty'] += qty
-                            found = True
-                            break
+            with db_lock:
+                if sess_id in sessions:
+                    cart = sessions[sess_id].get('cart', []) 
                     
-                    if not found:
-                        cart.append({'id': item_id, 'qty': qty})
-                
-                elif op == "remove":
-                    item_id, qty = parts[3], int(parts[4])
-                    current_total = 0
-                    for item in cart:
-                         if item['id'] == item_id:
-                              current_total += item['qty']
-                    if qty > current_total:
-                         send_msg(conn, "FAIL|Cannot remove more than you have")
-                         continue 
-                    new_cart = []
-                    for item in cart:
-                        if item['id'] == item_id and qty > 0:
-                             if item['qty'] > qty:
-                                 item['qty'] -= qty
-                                 new_cart.append(item)
-                                 qty = 0
-                             else: qty -= item['qty']
-                        else: new_cart.append(item)
-                    cart = new_cart
-                
-                elif op == "clear":
-                    cart = []
-                
-                sessions[sess_id]['cart'] = cart 
-                send_msg(conn, "SUCCESS")
-            else:
-                send_msg(conn, "FAIL")
+                    if op == "add":
+                        item_id, qty = parts[3], int(parts[4])
+                        found = False
+                        for item in cart:
+                            if item['id'] == item_id:
+                                item['qty'] += qty
+                                found = True
+                                break
+                        if not found:
+                            cart.append({'id': item_id, 'qty': qty})
+                    
+                    elif op == "remove":
+                        item_id, qty = parts[3], int(parts[4])
+                        current_total = 0
+                        for item in cart:
+                             if item['id'] == item_id: current_total += item['qty']
+                        
+                        if qty > current_total:
+                             pass 
+                        else:
+                            new_cart = []
+                            for item in cart:
+                                if item['id'] == item_id and qty > 0:
+                                     if item['qty'] > qty:
+                                         item['qty'] -= qty
+                                         new_cart.append(item)
+                                         qty = 0
+                                     else: qty -= item['qty']
+                                else: new_cart.append(item)
+                            cart = new_cart
+                    
+                    elif op == "clear":
+                        cart = []
+                    
+                    sessions[sess_id]['cart'] = cart 
+                    send_msg(conn, "SUCCESS")
+                else:
+                    send_msg(conn, "FAIL")
                 
         elif req_type == "UPDATE_FEEDBACK":
             target, type_ = parts[1], parts[2]
-            if target in users:
-                if type_ == "up": users[target]['feedback']['up'] += 1
-                elif type_ == "down": users[target]['feedback']['down'] += 1
-                send_msg(conn, "SUCCESS")
-            else: send_msg(conn, "FAIL")
+            with db_lock:
+                if target in users:
+                    if type_ == "up": users[target]['feedback']['up'] += 1
+                    elif type_ == "down": users[target]['feedback']['down'] += 1
+                    send_msg(conn, "SUCCESS")
+                else: send_msg(conn, "FAIL")
 
     conn.close()
 
