@@ -28,6 +28,10 @@ def start():
         if sess_id:
             if (time.time() - last_active) > 300: 
                 print("\n[-] Session Expired (Timeout). Please Login again.")
+                try:
+                    client.send_receive(f"LOGOUT|{sess_id}")
+                except:
+                    pass
                 sess_id = None
 
         msg = None
