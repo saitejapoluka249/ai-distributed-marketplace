@@ -8,11 +8,16 @@ from zeep import Client as SoapClient
 
 app = Flask(__name__)
 
+channel_options = [
+    ('grpc.max_concurrent_streams', 200),
+    ('grpc.keepalive_time_ms', 10000),
+    ('grpc.keepalive_timeout_ms', 5000),
+]
 #cust_channel = grpc.insecure_channel('localhost:50051')
-cust_channel = grpc.insecure_channel('10.128.0.2:50051')
+cust_channel = grpc.insecure_channel('10.128.0.8:50051',options=channel_options)
 cust_stub = ecommerce_pb2_grpc.CustomerServiceStub(cust_channel)
 #prod_channel = grpc.insecure_channel('localhost:50052')
-prod_channel = grpc.insecure_channel('10.128.0.3:50052')
+prod_channel = grpc.insecure_channel('10.128.0.9:50052',options=channel_options)
 prod_stub = ecommerce_pb2_grpc.ProductServiceStub(prod_channel)
 
 
@@ -199,4 +204,4 @@ def make_purchase():
 
 if __name__ == '__main__':
     print("Buyer Server (REST) running on 5003...")
-    app.run(host='0.0.0.0', port=5003, debug=True)
+    app.run(host='0.0.0.0', port=5003, debug=False, threaded=True)

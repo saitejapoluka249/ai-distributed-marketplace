@@ -2,148 +2,138 @@ import requests
 import threading
 import time
 import uuid
-import statistics
 
-# --- CONFIGURATION (UPDATE THESE IPs) ---
-BUYER_SERVER_URL = "http://10.128.0.4:5003"
-SELLER_SERVER_URL = "http://10.128.0.5:5001"
+# --- SERVER ENDPOINTS ---
+BUYER_API = "http://10.128.0.10:5003"
+SELLER_API = "http://10.128.0.11:5001"
 
-NUMBER_OF_REQUESTS_PER_CLIENT = 1000  
-NUMBER_OF_RUNS = 10                  
+REQUESTS_PER_USER = 1000
+ITERATIONS = 3
 
-def run_buyer_session(bot_id, latencies, lock):
-    """Simulates a RESTful buyer bot performing 1000 searches."""
-    session = requests.Session() 
-    username = f"b_bot_{bot_id}_{uuid.uuid4().hex[:4]}"
-    password = "pass"
+def setup_client_session(user_type, index):
+    """Authenticates a bot and returns an active session with its ID."""
+    req_session = requests.Session()
+    uid = f"{user_type}Test_{index}_{uuid.uuid4().hex[:5]}"
+    base_url = BUYER_API if user_type == "buyer" else SELLER_API
     
     try:
-        # 1. Create Account
-        session.post(f"{BUYER_SERVER_URL}/create_account", json={"username": username, "password": password})
-        
-        # 2. Login
-        login_resp = session.post(f"{BUYER_SERVER_URL}/login", json={"username": username, "password": password})
-        data = login_resp.json()
-        
-        if data.get("status") != "SUCCESS":
-            print(f"Buyer {bot_id} Login Failed: {data}")
-            return
-            
-        # 3. Perform 1000 API Calls (Search Items)
-        for _ in range(NUMBER_OF_REQUESTS_PER_CLIENT):
-            start = time.perf_counter()
-            
-            # Calling your GET /search route
-            resp = session.get(f"{BUYER_SERVER_URL}/search", params={"category": 1, "keywords": "test"})
-            
-            end = time.perf_counter()
-            
-            if resp.status_code == 200 and resp.json().get("status") == "SUCCESS":
-                with lock:
-                    latencies.append(end - start)
-            else:
-                break
-                
-    except Exception as e:
-        pass # Ignore connection drops during heavy load to keep calculating averages
-
-def run_seller_session(bot_id, latencies, lock):
-    """Simulates a RESTful seller bot performing 1000 rating checks."""
-    session = requests.Session()
-    username = f"s_bot_{bot_id}_{uuid.uuid4().hex[:4]}"
-    password = "pass"
-    
-    try:
-        # 1. Create Account
-        session.post(f"{SELLER_SERVER_URL}/create_account", json={"username": username, "password": password})
-        
-        # 2. Login
-        login_resp = session.post(f"{SELLER_SERVER_URL}/login", json={"username": username, "password": password})
-        data = login_resp.json()
-        
-        if data.get("status") != "SUCCESS":
-            print(f"Seller {bot_id} Login Failed: {data}")
-            return
-            
-        sess_id = data.get("sess_id")
-
-        # 3. Perform 1000 API Calls (Get Rating)
-        for _ in range(NUMBER_OF_REQUESTS_PER_CLIENT):
-            start = time.perf_counter()
-            
-            # Calling your GET /rating route
-            resp = session.get(f"{SELLER_SERVER_URL}/rating", params={"sess_id": sess_id})
-            
-            end = time.perf_counter()
-            
-            # Your seller rating route returns {"up": X, "down": Y}, so we just check status_code 200
-            if resp.status_code == 200:
-                with lock:
-                    latencies.append(end - start)
-            else:
-                break
-
-    except Exception as e:
+        # Create user (ignore if already exists)
+        req_session.post(f"{base_url}/create_account", json={"username": uid, "password": "123"})
+    except Exception:
         pass
+        
+    # Login and save session token
+    login_response = req_session.post(f"{base_url}/login", json={"username": uid, "password": "123"})
+    if login_response.status_code == 200:
+        return req_session, login_response.json().get("sess_id")
+    return req_session, None
 
-def run_experiment(num_buyers, num_sellers, run_idx):
-    """Executes a single run of concurrent users."""
+def execute_workload(user_type, req_session, session_token, latencies, thread_lock):
+    """Fires 1000 requests using an established connection."""
+    base_url = BUYER_API if user_type == "buyer" else SELLER_API
+    
+    for _ in range(REQUESTS_PER_USER):
+        t_start = time.perf_counter()
+        try:
+            if user_type == "buyer":
+                res = req_session.get(f"{base_url}/search", params={"category": 1, "keywords": "test"})
+            else:
+                res = req_session.get(f"{base_url}/rating", params={"sess_id": session_token})
+                
+            t_end = time.perf_counter()
+            
+            if res.status_code == 200:
+                with thread_lock:
+                    latencies.append(t_end - t_start)
+        except Exception:
+            pass
+
+def execute_iteration(buyers_count, sellers_count, b_sessions, s_sessions, iteration_num):
     latencies = []
-    lock = threading.Lock()
-    threads = []
+    thread_lock = threading.Lock()
+    worker_threads = []
     
-    start_wall_time = time.perf_counter()
-    
-    for i in range(num_buyers):
-        t = threading.Thread(target=run_buyer_session, args=(i, latencies, lock))
-        threads.append(t)
-    for i in range(num_sellers):
-        t = threading.Thread(target=run_seller_session, args=(i, latencies, lock))
-        threads.append(t)
-        
-    for t in threads: t.start()
-    for t in threads: t.join()
-        
-    end_wall_time = time.perf_counter()
-    
-    total_duration = end_wall_time - start_wall_time
-    total_ops = len(latencies)
-    
-    avg_latency = (sum(latencies) / total_ops) * 1000 if total_ops > 0 else 0
-    throughput = total_ops / total_duration if total_duration > 0 else 0
-    
-    print(f"   Run {run_idx+1}: {avg_latency:.2f} ms | {throughput:.2f} ops/sec")
-    return avg_latency, throughput
+    clock_start = time.perf_counter()
 
-def evaluate_scenario(num_buyers, num_sellers):
-    """Averages metrics over 10 runs for a specific scenario."""
-    print(f"\n" + "="*60)
-    print(f"SCENARIO: {num_buyers} Buyers & {num_sellers} Sellers")
-    print(f"Target: {num_buyers+num_sellers} clients x {NUMBER_OF_REQUESTS_PER_CLIENT} calls")
-    print("="*60)
+    # Launching buyers
+    for idx in range(buyers_count):
+        session, s_id = b_sessions[idx]
+        if s_id:
+            th = threading.Thread(target=execute_workload, args=("buyer", session, s_id, latencies, thread_lock))
+            worker_threads.append(th)
+            th.start()
+            # Stagger threads to prevent connection drops
+            if buyers_count + sellers_count > 50:
+                time.sleep(0.001)
+
+    # Launching sellers
+    for idx in range(sellers_count):
+        session, s_id = s_sessions[idx]
+        if s_id:
+            th = threading.Thread(target=execute_workload, args=("seller", session, s_id, latencies, thread_lock))
+            worker_threads.append(th)
+            th.start()
+            # Stagger threads to prevent connection drops
+            if buyers_count + sellers_count > 50:
+                time.sleep(0.001)
+
+    for th in worker_threads:
+        th.join()
+
+    clock_end = time.perf_counter()
     
-    run_latencies = []
-    run_throughputs = []
+    duration = clock_end - clock_start
+    successful_requests = len(latencies)
     
-    for i in range(NUMBER_OF_RUNS):
-        lat, thr = run_experiment(num_buyers, num_sellers, i)
-        run_latencies.append(lat)
-        run_throughputs.append(thr)
-        time.sleep(1) # Let the servers breathe between runs
+    mean_latency = (sum(latencies) / successful_requests) * 1000 if successful_requests > 0 else 0
+    ops_per_sec = successful_requests / duration if duration > 0 else 0
+    
+    print(f" --> Iteration {iteration_num}/{ITERATIONS} | Latency: {mean_latency:.2f}ms | Throughput: {ops_per_sec:.2f} req/sec | Time: {duration:.2f}s")
+    return mean_latency, ops_per_sec
+
+def benchmark_scenario(b_count, s_count):
+    print("\n" + "#" * 60)
+    print(f"BENCHMARK: {b_count} Buyers & {s_count} Sellers")
+    print(f"Total Load: {(b_count + s_count) * REQUESTS_PER_USER} requests per iteration")
+    print("#" * 60)
+    
+    print("Initializing bot sessions... Please wait.")
+    b_sessions = [setup_client_session("buyer", i) for i in range(b_count)]
+    s_sessions = [setup_client_session("seller", i) for i in range(s_count)]
+    print("Setup complete. Starting timers...\n")
+    
+    scenario_latencies = []
+    scenario_throughputs = []
+    
+    for i in range(ITERATIONS):
+        lat, thr = execute_iteration(b_count, s_count, b_sessions, s_sessions, i + 1)
+        scenario_latencies.append(lat)
+        scenario_throughputs.append(thr)
+        time.sleep(1.5) # Brief pause between iterations
         
-    final_avg_lat = statistics.mean(run_latencies)
-    final_avg_thr = statistics.mean(run_throughputs)
+    overall_lat = sum(scenario_latencies) / len(scenario_latencies)
+    overall_thr = sum(scenario_throughputs) / len(scenario_throughputs)
     
-    print(f"-"*60)
-    print(f"FINAL AVERAGE >> Latency: {final_avg_lat:.2f} ms | Throughput: {final_avg_thr:.2f} ops/sec")
-    print(f"-"*60)
+    print("-" * 40)
+    print(f"Mean Scenario Latency    : {overall_lat:.2f} ms")
+    print(f"Mean Scenario Throughput : {overall_thr:.2f} requests/second")
+    print("-" * 40)
+    
+    return overall_lat, overall_thr
 
 if __name__ == "__main__":
-    # Scenario 1
-    #evaluate_scenario(1, 1)
+    metrics = []
+    test_cases = [(1, 1), (10, 10), (100, 100)]
     
-    # Scenario 2
-    evaluate_scenario(10, 10)
-    
-    # Scenario 3
-    # evaluate_scenario(100, 100)
+    for b, s in test_cases:
+        lat, thr = benchmark_scenario(b, s)
+        metrics.append((b, s, lat, thr))
+        
+    # Unique Summary Output
+    print("\n\n" + "*" * 65)
+    print("FINAL PERFORMANCE REPORT")
+    print("*" * 65)
+    print(f"{'Concurrency Profile':<25} | {'Response Time (ms)':<20} | {'Ops/Second':<15}")
+    print("-" * 65)
+    for b, s, lat, thr in metrics:
+        print(f"{b} Buyers, {s} Sellers".ljust(25) + f"| {lat:<20.2f} | {thr:<15.2f}")

@@ -16,6 +16,7 @@ def get_db_connection():
 
 def init_db():
     conn = get_db_connection()
+    conn.execute("PRAGMA journal_mode=WAL")
     cursor = conn.cursor()
     cursor.execute('''CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -195,7 +196,13 @@ class CustomerService(ecommerce_pb2_grpc.CustomerServiceServicer):
 
 def serve():
     init_db()
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+    server = grpc.server(
+        futures.ThreadPoolExecutor(max_workers=100),
+        options=[
+            ('grpc.max_concurrent_streams', 200),
+            ('grpc.max_receive_message_length', 16 * 1024 * 1024),
+        ]
+    )
     ecommerce_pb2_grpc.add_CustomerServiceServicer_to_server(CustomerService(), server)
     server.add_insecure_port('[::]:50051')
     print("Customer DB (gRPC) running on 50051...")

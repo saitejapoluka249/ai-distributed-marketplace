@@ -14,6 +14,7 @@ def get_db_connection(): return sqlite3.connect(DB_NAME)
 
 def init_db():
     conn = get_db_connection()
+    conn.execute("PRAGMA journal_mode=WAL")
     cursor = conn.cursor()
     cursor.execute('''CREATE TABLE IF NOT EXISTS items (
         item_id TEXT PRIMARY KEY, name TEXT, category INTEGER, keywords TEXT,
@@ -107,7 +108,13 @@ class ProductService(ecommerce_pb2_grpc.ProductServiceServicer):
 
 def serve():
     init_db()
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+    server = grpc.server(
+        futures.ThreadPoolExecutor(max_workers=100),
+        options=[
+            ('grpc.max_concurrent_streams', 200),
+            ('grpc.max_receive_message_length', 16 * 1024 * 1024),
+        ]
+    )
     ecommerce_pb2_grpc.add_ProductServiceServicer_to_server(ProductService(), server)
     server.add_insecure_port('[::]:50052')
     print("Product DB (gRPC) running on 50052...")
