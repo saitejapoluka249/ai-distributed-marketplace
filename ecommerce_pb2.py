@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0f\x65\x63ommerce.proto\x12\tecommerce\"\x07\n\x05\x45mpty\"/\n\x0bResponseMsg\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t\"C\n\x0fRegisterRequest\x12\x10\n\x08username\x18\x01 \x01(\t\x12\x10\n\x08password\x18\x02 \x01(\t\x12\x0c\n\x04role\x18\x03 \x01(\t\"E\n\x10RegisterResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t\x12\x0f\n\x07user_id\x18\x03 \x01(\x05\"2\n\x0cLoginRequest\x12\x10\n\x08username\x18\x01 \x01(\t\x12\x10\n\x08password\x18\x02 \x01(\t\"1\n\rLoginResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t\"3\n\x0eSessionRequest\x12\x0f\n\x07sess_id\x18\x01 \x01(\t\x12\x10\n\x08username\x18\x02 \x01(\t\"5\n\x10ValidateResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x10\n\x08username\x18\x02 \x01(\t\"\x1c\n\x0bUserRequest\x12\r\n\x05query\x18\x01 \x01(\t\"x\n\x0cUserResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\n\n\x02id\x18\x02 \x01(\x05\x12\x0c\n\x04role\x18\x03 \x01(\t\x12\r\n\x05\x66\x62_up\x18\x04 \x01(\x05\x12\x0f\n\x07\x66\x62_down\x18\x05 \x01(\x05\x12\x1d\n\x15purchase_history_json\x18\x06 \x01(\t\"K\n\x0eRatingResponse\x12\n\n\x02up\x18\x01 \x01(\x05\x12\x0c\n\x04\x64own\x18\x02 \x01(\x05\x12\x0e\n\x06status\x18\x03 \x01(\t\x12\x0f\n\x07message\x18\x04 \x01(\t\"2\n\x0f\x46\x65\x65\x64\x62\x61\x63kRequest\x12\x11\n\ttarget_id\x18\x01 \x01(\t\x12\x0c\n\x04type\x18\x02 \x01(\t\"\x83\x01\n\x0bItemRequest\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x10\n\x08\x63\x61tegory\x18\x02 \x01(\x05\x12\x10\n\x08keywords\x18\x03 \x01(\t\x12\x11\n\tcondition\x18\x04 \x01(\t\x12\r\n\x05price\x18\x05 \x01(\x01\x12\x10\n\x08quantity\x18\x06 \x01(\x05\x12\x0e\n\x06seller\x18\x07 \x01(\t\"\xa2\x01\n\x0cItemResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0f\n\x07item_id\x18\x02 \x01(\t\x12\x0c\n\x04name\x18\x03 \x01(\t\x12\r\n\x05price\x18\x04 \x01(\x01\x12\x10\n\x08quantity\x18\x05 \x01(\x05\x12\x0e\n\x06seller\x18\x06 \x01(\t\x12\r\n\x05\x66\x62_up\x18\x07 \x01(\x05\x12\x0f\n\x07\x66\x62_down\x18\x08 \x01(\x05\x12\x11\n\tcondition\x18\t \x01(\t\"\x17\n\tIDRequest\x12\n\n\x02id\x18\x01 \x01(\t\"3\n\rSearchRequest\x12\x10\n\x08\x63\x61tegory\x18\x01 \x01(\x05\x12\x10\n\x08keywords\x18\x02 \x01(\t\"$\n\x0eSearchResponse\x12\x12\n\nitem_lines\x18\x01 \x03(\t\"8\n\x12UpdatePriceRequest\x12\x0f\n\x07item_id\x18\x01 \x01(\t\x12\x11\n\tnew_price\x18\x02 \x01(\x01\"7\n\x10UpdateQtyRequest\x12\x0f\n\x07item_id\x18\x01 \x01(\t\x12\x12\n\nqty_change\x18\x02 \x01(\x05\"@\n\x0f\x43\x61rtItemRequest\x12\x0f\n\x07sess_id\x18\x01 \x01(\t\x12\x0f\n\x07item_id\x18\x02 \x01(\t\x12\x0b\n\x03qty\x18\x03 \x01(\x05\"2\n\x0c\x43\x61rtResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x11\n\tcart_json\x18\x02 \x01(\t\"7\n\x0fPurchaseRequest\x12\x10\n\x08username\x18\x01 \x01(\t\x12\x12\n\nitems_json\x18\x02 \x01(\t2\xd2\x06\n\x0f\x43ustomerService\x12\x43\n\x08Register\x12\x1a.ecommerce.RegisterRequest\x1a\x1b.ecommerce.RegisterResponse\x12:\n\x05Login\x12\x17.ecommerce.LoginRequest\x1a\x18.ecommerce.LoginResponse\x12:\n\x0bSaveSession\x12\x19.ecommerce.SessionRequest\x1a\x10.ecommerce.Empty\x12I\n\x0fValidateSession\x12\x19.ecommerce.SessionRequest\x1a\x1b.ecommerce.ValidateResponse\x12\x35\n\x06Logout\x12\x19.ecommerce.SessionRequest\x1a\x10.ecommerce.Empty\x12>\n\x0bGetUserData\x12\x16.ecommerce.UserRequest\x1a\x17.ecommerce.UserResponse\x12>\n\x0eUpdateFeedback\x12\x1a.ecommerce.FeedbackRequest\x1a\x10.ecommerce.Empty\x12=\n\x07GetCart\x12\x19.ecommerce.SessionRequest\x1a\x17.ecommerce.CartResponse\x12?\n\tAddToCart\x12\x1a.ecommerce.CartItemRequest\x1a\x16.ecommerce.ResponseMsg\x12\x44\n\x0eRemoveFromCart\x12\x1a.ecommerce.CartItemRequest\x1a\x16.ecommerce.ResponseMsg\x12\x38\n\tClearCart\x12\x19.ecommerce.SessionRequest\x1a\x10.ecommerce.Empty\x12=\n\x08SaveCart\x12\x19.ecommerce.SessionRequest\x1a\x16.ecommerce.ResponseMsg\x12\x41\n\x11\x41\x64\x64PurchasedItems\x12\x1a.ecommerce.PurchaseRequest\x1a\x10.ecommerce.Empty2\xa5\x04\n\x0eProductService\x12?\n\x0cRegisterItem\x12\x16.ecommerce.ItemRequest\x1a\x17.ecommerce.ItemResponse\x12\x38\n\x07GetItem\x12\x14.ecommerce.IDRequest\x1a\x17.ecommerce.ItemResponse\x12\x42\n\x0bSearchItems\x12\x18.ecommerce.SearchRequest\x1a\x19.ecommerce.SearchResponse\x12\x43\n\x0eGetSellerItems\x12\x16.ecommerce.UserRequest\x1a\x19.ecommerce.SearchResponse\x12\x44\n\x0bUpdatePrice\x12\x1d.ecommerce.UpdatePriceRequest\x1a\x16.ecommerce.ResponseMsg\x12@\n\tUpdateQty\x12\x1b.ecommerce.UpdateQtyRequest\x1a\x16.ecommerce.ResponseMsg\x12\x42\n\x12UpdateItemFeedback\x12\x1a.ecommerce.FeedbackRequest\x1a\x10.ecommerce.Empty\x12\x43\n\x0eGetSellerStats\x12\x16.ecommerce.UserRequest\x1a\x19.ecommerce.RatingResponseb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0f\x65\x63ommerce.proto\x12\tecommerce\"\x07\n\x05\x45mpty\"/\n\x0bResponseMsg\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t\"C\n\x0fRegisterRequest\x12\x10\n\x08username\x18\x01 \x01(\t\x12\x10\n\x08password\x18\x02 \x01(\t\x12\x0c\n\x04role\x18\x03 \x01(\t\"E\n\x10RegisterResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t\x12\x0f\n\x07user_id\x18\x03 \x01(\x05\"@\n\x0cLoginRequest\x12\x10\n\x08username\x18\x01 \x01(\t\x12\x10\n\x08password\x18\x02 \x01(\t\x12\x0c\n\x04role\x18\x03 \x01(\t\"1\n\rLoginResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t\"3\n\x0eSessionRequest\x12\x0f\n\x07sess_id\x18\x01 \x01(\t\x12\x10\n\x08username\x18\x02 \x01(\t\"5\n\x10ValidateResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x10\n\x08username\x18\x02 \x01(\t\"\x1c\n\x0bUserRequest\x12\r\n\x05query\x18\x01 \x01(\t\"x\n\x0cUserResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\n\n\x02id\x18\x02 \x01(\x05\x12\x0c\n\x04role\x18\x03 \x01(\t\x12\r\n\x05\x66\x62_up\x18\x04 \x01(\x05\x12\x0f\n\x07\x66\x62_down\x18\x05 \x01(\x05\x12\x1d\n\x15purchase_history_json\x18\x06 \x01(\t\"K\n\x0eRatingResponse\x12\n\n\x02up\x18\x01 \x01(\x05\x12\x0c\n\x04\x64own\x18\x02 \x01(\x05\x12\x0e\n\x06status\x18\x03 \x01(\t\x12\x0f\n\x07message\x18\x04 \x01(\t\"2\n\x0f\x46\x65\x65\x64\x62\x61\x63kRequest\x12\x11\n\ttarget_id\x18\x01 \x01(\t\x12\x0c\n\x04type\x18\x02 \x01(\t\"\x83\x01\n\x0bItemRequest\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x10\n\x08\x63\x61tegory\x18\x02 \x01(\x05\x12\x10\n\x08keywords\x18\x03 \x01(\t\x12\x11\n\tcondition\x18\x04 \x01(\t\x12\r\n\x05price\x18\x05 \x01(\x01\x12\x10\n\x08quantity\x18\x06 \x01(\x05\x12\x0e\n\x06seller\x18\x07 \x01(\t\"\xa2\x01\n\x0cItemResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0f\n\x07item_id\x18\x02 \x01(\t\x12\x0c\n\x04name\x18\x03 \x01(\t\x12\r\n\x05price\x18\x04 \x01(\x01\x12\x10\n\x08quantity\x18\x05 \x01(\x05\x12\x0e\n\x06seller\x18\x06 \x01(\t\x12\r\n\x05\x66\x62_up\x18\x07 \x01(\x05\x12\x0f\n\x07\x66\x62_down\x18\x08 \x01(\x05\x12\x11\n\tcondition\x18\t \x01(\t\"\x17\n\tIDRequest\x12\n\n\x02id\x18\x01 \x01(\t\"3\n\rSearchRequest\x12\x10\n\x08\x63\x61tegory\x18\x01 \x01(\x05\x12\x10\n\x08keywords\x18\x02 \x01(\t\"$\n\x0eSearchResponse\x12\x12\n\nitem_lines\x18\x01 \x03(\t\"8\n\x12UpdatePriceRequest\x12\x0f\n\x07item_id\x18\x01 \x01(\t\x12\x11\n\tnew_price\x18\x02 \x01(\x01\"7\n\x10UpdateQtyRequest\x12\x0f\n\x07item_id\x18\x01 \x01(\t\x12\x12\n\nqty_change\x18\x02 \x01(\x05\"@\n\x0f\x43\x61rtItemRequest\x12\x0f\n\x07sess_id\x18\x01 \x01(\t\x12\x0f\n\x07item_id\x18\x02 \x01(\t\x12\x0b\n\x03qty\x18\x03 \x01(\x05\"2\n\x0c\x43\x61rtResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x11\n\tcart_json\x18\x02 \x01(\t\"7\n\x0fPurchaseRequest\x12\x10\n\x08username\x18\x01 \x01(\t\x12\x12\n\nitems_json\x18\x02 \x01(\t2\xd2\x06\n\x0f\x43ustomerService\x12\x43\n\x08Register\x12\x1a.ecommerce.RegisterRequest\x1a\x1b.ecommerce.RegisterResponse\x12:\n\x05Login\x12\x17.ecommerce.LoginRequest\x1a\x18.ecommerce.LoginResponse\x12:\n\x0bSaveSession\x12\x19.ecommerce.SessionRequest\x1a\x10.ecommerce.Empty\x12I\n\x0fValidateSession\x12\x19.ecommerce.SessionRequest\x1a\x1b.ecommerce.ValidateResponse\x12\x35\n\x06Logout\x12\x19.ecommerce.SessionRequest\x1a\x10.ecommerce.Empty\x12>\n\x0bGetUserData\x12\x16.ecommerce.UserRequest\x1a\x17.ecommerce.UserResponse\x12>\n\x0eUpdateFeedback\x12\x1a.ecommerce.FeedbackRequest\x1a\x10.ecommerce.Empty\x12=\n\x07GetCart\x12\x19.ecommerce.SessionRequest\x1a\x17.ecommerce.CartResponse\x12?\n\tAddToCart\x12\x1a.ecommerce.CartItemRequest\x1a\x16.ecommerce.ResponseMsg\x12\x44\n\x0eRemoveFromCart\x12\x1a.ecommerce.CartItemRequest\x1a\x16.ecommerce.ResponseMsg\x12\x38\n\tClearCart\x12\x19.ecommerce.SessionRequest\x1a\x10.ecommerce.Empty\x12=\n\x08SaveCart\x12\x19.ecommerce.SessionRequest\x1a\x16.ecommerce.ResponseMsg\x12\x41\n\x11\x41\x64\x64PurchasedItems\x12\x1a.ecommerce.PurchaseRequest\x1a\x10.ecommerce.Empty2\xa5\x04\n\x0eProductService\x12?\n\x0cRegisterItem\x12\x16.ecommerce.ItemRequest\x1a\x17.ecommerce.ItemResponse\x12\x38\n\x07GetItem\x12\x14.ecommerce.IDRequest\x1a\x17.ecommerce.ItemResponse\x12\x42\n\x0bSearchItems\x12\x18.ecommerce.SearchRequest\x1a\x19.ecommerce.SearchResponse\x12\x43\n\x0eGetSellerItems\x12\x16.ecommerce.UserRequest\x1a\x19.ecommerce.SearchResponse\x12\x44\n\x0bUpdatePrice\x12\x1d.ecommerce.UpdatePriceRequest\x1a\x16.ecommerce.ResponseMsg\x12@\n\tUpdateQty\x12\x1b.ecommerce.UpdateQtyRequest\x1a\x16.ecommerce.ResponseMsg\x12\x42\n\x12UpdateItemFeedback\x12\x1a.ecommerce.FeedbackRequest\x1a\x10.ecommerce.Empty\x12\x43\n\x0eGetSellerStats\x12\x16.ecommerce.UserRequest\x1a\x19.ecommerce.RatingResponseb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -40,43 +40,43 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_REGISTERRESPONSE']._serialized_start=157
   _globals['_REGISTERRESPONSE']._serialized_end=226
   _globals['_LOGINREQUEST']._serialized_start=228
-  _globals['_LOGINREQUEST']._serialized_end=278
-  _globals['_LOGINRESPONSE']._serialized_start=280
-  _globals['_LOGINRESPONSE']._serialized_end=329
-  _globals['_SESSIONREQUEST']._serialized_start=331
-  _globals['_SESSIONREQUEST']._serialized_end=382
-  _globals['_VALIDATERESPONSE']._serialized_start=384
-  _globals['_VALIDATERESPONSE']._serialized_end=437
-  _globals['_USERREQUEST']._serialized_start=439
-  _globals['_USERREQUEST']._serialized_end=467
-  _globals['_USERRESPONSE']._serialized_start=469
-  _globals['_USERRESPONSE']._serialized_end=589
-  _globals['_RATINGRESPONSE']._serialized_start=591
-  _globals['_RATINGRESPONSE']._serialized_end=666
-  _globals['_FEEDBACKREQUEST']._serialized_start=668
-  _globals['_FEEDBACKREQUEST']._serialized_end=718
-  _globals['_ITEMREQUEST']._serialized_start=721
-  _globals['_ITEMREQUEST']._serialized_end=852
-  _globals['_ITEMRESPONSE']._serialized_start=855
-  _globals['_ITEMRESPONSE']._serialized_end=1017
-  _globals['_IDREQUEST']._serialized_start=1019
-  _globals['_IDREQUEST']._serialized_end=1042
-  _globals['_SEARCHREQUEST']._serialized_start=1044
-  _globals['_SEARCHREQUEST']._serialized_end=1095
-  _globals['_SEARCHRESPONSE']._serialized_start=1097
-  _globals['_SEARCHRESPONSE']._serialized_end=1133
-  _globals['_UPDATEPRICEREQUEST']._serialized_start=1135
-  _globals['_UPDATEPRICEREQUEST']._serialized_end=1191
-  _globals['_UPDATEQTYREQUEST']._serialized_start=1193
-  _globals['_UPDATEQTYREQUEST']._serialized_end=1248
-  _globals['_CARTITEMREQUEST']._serialized_start=1250
-  _globals['_CARTITEMREQUEST']._serialized_end=1314
-  _globals['_CARTRESPONSE']._serialized_start=1316
-  _globals['_CARTRESPONSE']._serialized_end=1366
-  _globals['_PURCHASEREQUEST']._serialized_start=1368
-  _globals['_PURCHASEREQUEST']._serialized_end=1423
-  _globals['_CUSTOMERSERVICE']._serialized_start=1426
-  _globals['_CUSTOMERSERVICE']._serialized_end=2276
-  _globals['_PRODUCTSERVICE']._serialized_start=2279
-  _globals['_PRODUCTSERVICE']._serialized_end=2828
+  _globals['_LOGINREQUEST']._serialized_end=292
+  _globals['_LOGINRESPONSE']._serialized_start=294
+  _globals['_LOGINRESPONSE']._serialized_end=343
+  _globals['_SESSIONREQUEST']._serialized_start=345
+  _globals['_SESSIONREQUEST']._serialized_end=396
+  _globals['_VALIDATERESPONSE']._serialized_start=398
+  _globals['_VALIDATERESPONSE']._serialized_end=451
+  _globals['_USERREQUEST']._serialized_start=453
+  _globals['_USERREQUEST']._serialized_end=481
+  _globals['_USERRESPONSE']._serialized_start=483
+  _globals['_USERRESPONSE']._serialized_end=603
+  _globals['_RATINGRESPONSE']._serialized_start=605
+  _globals['_RATINGRESPONSE']._serialized_end=680
+  _globals['_FEEDBACKREQUEST']._serialized_start=682
+  _globals['_FEEDBACKREQUEST']._serialized_end=732
+  _globals['_ITEMREQUEST']._serialized_start=735
+  _globals['_ITEMREQUEST']._serialized_end=866
+  _globals['_ITEMRESPONSE']._serialized_start=869
+  _globals['_ITEMRESPONSE']._serialized_end=1031
+  _globals['_IDREQUEST']._serialized_start=1033
+  _globals['_IDREQUEST']._serialized_end=1056
+  _globals['_SEARCHREQUEST']._serialized_start=1058
+  _globals['_SEARCHREQUEST']._serialized_end=1109
+  _globals['_SEARCHRESPONSE']._serialized_start=1111
+  _globals['_SEARCHRESPONSE']._serialized_end=1147
+  _globals['_UPDATEPRICEREQUEST']._serialized_start=1149
+  _globals['_UPDATEPRICEREQUEST']._serialized_end=1205
+  _globals['_UPDATEQTYREQUEST']._serialized_start=1207
+  _globals['_UPDATEQTYREQUEST']._serialized_end=1262
+  _globals['_CARTITEMREQUEST']._serialized_start=1264
+  _globals['_CARTITEMREQUEST']._serialized_end=1328
+  _globals['_CARTRESPONSE']._serialized_start=1330
+  _globals['_CARTRESPONSE']._serialized_end=1380
+  _globals['_PURCHASEREQUEST']._serialized_start=1382
+  _globals['_PURCHASEREQUEST']._serialized_end=1437
+  _globals['_CUSTOMERSERVICE']._serialized_start=1440
+  _globals['_CUSTOMERSERVICE']._serialized_end=2290
+  _globals['_PRODUCTSERVICE']._serialized_start=2293
+  _globals['_PRODUCTSERVICE']._serialized_end=2842
 # @@protoc_insertion_point(module_scope)

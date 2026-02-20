@@ -4,7 +4,7 @@ import re
 import sys
 
 #BASE_URL = "http://localhost:5001"
-BASE_URL = "35.184.65.235"
+BASE_URL = "http://35.184.65.235:5001"
 sess_id = None
 
 def get_input(prompt, data_type=str, error_msg="Invalid input", regex=None):

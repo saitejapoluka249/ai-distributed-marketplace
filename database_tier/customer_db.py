@@ -57,10 +57,14 @@ class CustomerService(ecommerce_pb2_grpc.CustomerServiceServicer):
         return ecommerce_pb2.RegisterResponse(success=False, message="User exists")
 
     def Login(self, request, context):
-        row = self._execute("SELECT password FROM users WHERE username = ?", (request.username,), fetch_one=True)
-        if row and row[0] == request.password:
+        row = self._execute(
+        "SELECT id FROM users WHERE username = ? AND password = ? AND role = ?", 
+        (request.username, request.password, request.role), 
+        fetch_one=True
+        )
+        if row:
             return ecommerce_pb2.LoginResponse(success=True, message="Login Success")
-        return ecommerce_pb2.LoginResponse(success=False, message="Invalid Credentials")
+        return ecommerce_pb2.LoginResponse(success=False, message="Invalid Credentials or Wrong Account Type")
 
     def SaveSession(self, request, context):
         user_row = self._execute("SELECT role, saved_cart, cart_version FROM users WHERE username = ?", (request.username,), fetch_one=True)

@@ -710,8 +710,7 @@ class ProductServiceServicer(object):
         raise NotImplementedError('Method not implemented!')
 
     def GetSellerStats(self, request, context):
-        """--- NEW: Calculate Total Rating for Seller ---
-        """
+        """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')

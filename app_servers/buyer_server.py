@@ -9,10 +9,10 @@ from zeep import Client as SoapClient
 app = Flask(__name__)
 
 #cust_channel = grpc.insecure_channel('localhost:50051')
-cust_channel = grpc.insecure_channel('10.128.0.2')
+cust_channel = grpc.insecure_channel('10.128.0.2:50051')
 cust_stub = ecommerce_pb2_grpc.CustomerServiceStub(cust_channel)
 #prod_channel = grpc.insecure_channel('localhost:50052')
-prod_channel = grpc.insecure_channel('10.128.0.3')
+prod_channel = grpc.insecure_channel('10.128.0.3:50052')
 prod_stub = ecommerce_pb2_grpc.ProductServiceStub(prod_channel)
 
 
@@ -37,7 +37,7 @@ def login():
     data = request.json
     if not is_valid_string(data.get('username')) or not is_valid_string(data.get('password')):
         return jsonify({"status": "FAIL", "message": "Missing Credentials"})
-    resp = cust_stub.Login(ecommerce_pb2.LoginRequest(username=data['username'], password=data['password']))
+    resp = cust_stub.Login(ecommerce_pb2.LoginRequest(username=data['username'], password=data['password'], role='BUYER'))
     if resp.success:
         import uuid
         sess_id = str(uuid.uuid4())
