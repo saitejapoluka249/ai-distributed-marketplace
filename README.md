@@ -1,60 +1,82 @@
-# Distributed Marketplace System
+# **README.md**
 
-## PA1 Description
+## **System Design**
 
-This is a multi-threaded distributed marketplace system where multiple buyers and sellers can interact simultaneously. I built this system to demonstrate how distributed components communicate over a network using raw TCP sockets. The system allows users to create accounts, login, search for items, rate sellers, and manage a shopping cart in real-time.
+This project implements a 3-tier distributed marketplace. It moves away from the raw TCP sockets used in PA1 and instead uses **gRPC** for backend communication. The system is built with:
 
-## System Design
+- **Client Tier:** RESTful clients for Buyers and Sellers.
+- **Application Tier:** Stateless Flask servers that handle business logic and talk to the databases via gRPC.
+- **Database Tier:** gRPC servers managing SQLite databases with **Write-Ahead Logging (WAL)** to support high concurrency.
 
-The system follows a 3-tier architecture with the following components:
+## **Technical Features & Assumptions**
 
-1. **Client Tier (clients/):**
-* `buyer_client.py`: Provides a menu interface for buyers to search, add items to cart, and make purchases.
-* `seller_client.py`: Allows sellers to register new items, update stock, and check their ratings.
+- **gRPC Optimization:** Servers use 100 max workers and 200 concurrent streams to prevent network bottlenecks.
+- **Persistence:** Data is stored in `.db` files on the VM disk, ensuring it is preserved if the process restarts.
+- **Deployment:** All VMs are assumed to be in the same GCP region to utilize low-latency internal IP communication.
 
+## **Current Status**
 
-2. **Application Tier (app_servers/):**
-* `buyer_server.py` and `seller_server.py`: These servers act as **stateless** middleware. They do not store user state locally; instead, they validate sessions with the database for every request. They handle business logic and manage communication between the clients and the databases.
+The system is fully functional and stable. It successfully handles the 200-client stress test (Scenario 3) with a throughput of over 220 ops/sec. All core features like account management, cart operations, purchasing operations, and feedback are working.
 
+---
 
-3. **Database Tier (database_tier/):**
-* `customer_db.py`: Stores user accounts, sessions, and cart data.
-* `product_db.py`: Stores item details, prices, and inventory counts.
+# **GCP Setup & Execution Guide**
 
+To run this system on Google Cloud, follow these steps across your four VMs. Ensure you have uploaded your `DistributedSystemSetup.sh` script to the home directory of each VM first.
 
+### **Step 1: Database Tier Setup**
 
-## Key Technical Features
+**On VM 1 (customer-db):**
 
-* **Concurrency:** The system uses Python's `threading` module to handle multiple concurrent client connections without blocking.
-* **Persistent Connections:** To improve performance, I implemented persistent TCP connections. This means the client establishes a connection once and reuses it for multiple requests, significantly reducing network overhead.
-* **Custom Protocol:** All communication uses a custom application-level protocol defined in `common/protocol.py`, which uses fixed-length headers to ensure reliable message delivery.
-* **Session Expiry:** To ensure security and resource management, user sessions are designed to automatically expire after 5 minutes of inactivity.
+```bash
+bash DistributedSystemSetup.sh database_tier.customer_db
 
-## How to Run the System
+```
 
-To run the full system, open separate terminal windows and execute the files in the following order:
+**On VM 2 (product-db):**
 
-**1. Start the Databases:**
-`python3 -m database_tier.customer_db`
-`python3 -m database_tier.product_db`
+```bash
+bash DistributedSystemSetup.sh database_tier.product_db
 
-**2. Start the App Servers:**
-`python3 -m app_servers.buyer_server`
-`python3 -m app_servers.seller_server`
+```
 
-**3. Run the Clients (For Manual Testing):**
-`python3 -m clients.buyer_client`
-`python3 -m clients.seller_client`
+### **Step 2: Application Tier Setup**
 
-**4. Run the Evaluation Script (For Load Testing):**
-`python3 evaluation.py`
+**On VM 3 (seller-server):**
 
-*(Note: Make sure you are in the root directory DistributedMarketplaceProject before running these commands.)*
+```bash
+bash DistributedSystemSetup.sh app_servers.seller_server
 
-## Current Status
+```
 
-The system is fully functional.
+**On VM 4 (buyer-server) - You need two windows:**
 
-* **Features Working:** Account registration, login/logout, item search, cart management (add/remove/clear), and feedback submission.
-* **Performance:** The system passes the load test with 100 concurrent buyers and 100 concurrent sellers.
-* **Limitations:** The database is currently in-memory (using Python dictionaries). If the database scripts are stopped, the data is lost.
+- **Window A (Buyer Server):**
+
+```bash
+bash DistributedSystemSetup.sh app_servers.buyer_server
+
+```
+
+- **Window B (Financial SOAP Service):**
+  Open a second SSH connection to the same VM and run:
+
+```bash
+cd Distributed-Marketplace-Project-Python
+python3 financial_service.py
+
+```
+
+### **Step 3: Performance Evaluation**
+
+Once all four servers are running and showing logs, go to your **5th VM (evaluation)** and run the benchmark:
+
+```bash
+sudo apt update -y
+sudo apt install git python3-pip -y
+git clone https://github.com/saitejapoluka249/Distributed-Marketplace-Project-Python.git
+cd Distributed-Marketplace-Project-Python/
+pip3 install requests --break-system-packages
+python3 evaluation.py
+
+```
