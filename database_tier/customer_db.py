@@ -1,280 +1,202 @@
-import threading
+import grpc
+from concurrent import futures
+import time
 import json
-import time 
 import sqlite3
-from common.protocol import send_msg, recv_msg
-from common.tcp_base import TCPServer
+import threading
+
+import ecommerce_pb2
+import ecommerce_pb2_grpc
 
 DB_NAME = "customers.db"
-db_lock = threading.Lock() 
+db_lock = threading.Lock()
+
+def get_db_connection():
+    return sqlite3.connect(DB_NAME)
 
 def init_db():
-    """Initialize the SQL database with required tables."""
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_db_connection()
     cursor = conn.cursor()
-    
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE,
-            password TEXT,
-            role TEXT,
-            feedback_up INTEGER DEFAULT 0,
-            feedback_down INTEGER DEFAULT 0,
-            items_traded INTEGER DEFAULT 0,
-            saved_cart TEXT DEFAULT '[]',   -- Storing JSON string
-            cart_version INTEGER DEFAULT 0,
-            purchase_history TEXT DEFAULT '[]'
-        )
-    ''')
-
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS sessions (
-            sess_id TEXT PRIMARY KEY,
-            username TEXT,
-            last_active REAL,
-            current_cart TEXT DEFAULT '[]',
-            cart_version INTEGER DEFAULT 0
-        )
-    ''')
-    
+    cursor.execute('''CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT UNIQUE, password TEXT, role TEXT,
+        feedback_up INTEGER DEFAULT 0, feedback_down INTEGER DEFAULT 0,
+        saved_cart TEXT DEFAULT '[]', cart_version INTEGER DEFAULT 0,
+        purchase_history TEXT DEFAULT '[]')''')
+    cursor.execute('''CREATE TABLE IF NOT EXISTS sessions (
+        sess_id TEXT PRIMARY KEY, username TEXT, last_active REAL,
+        current_cart TEXT DEFAULT '[]', cart_version INTEGER DEFAULT 0)''')
     conn.commit()
     conn.close()
 
-def get_db_connection():
-    """Helper to get a connection object."""
-    return sqlite3.connect(DB_NAME)
+class CustomerService(ecommerce_pb2_grpc.CustomerServiceServicer):
+    
+    def _execute(self, query, params=(), fetch_one=False, fetch_all=False, commit=False):
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        res = None
+        try:
+            with db_lock:
+                cursor.execute(query, params)
+                if commit: conn.commit()
+                if fetch_one: res = cursor.fetchone()
+                if fetch_all: res = cursor.fetchall()
+                if commit and not fetch_one and not fetch_all: res = cursor.lastrowid
+        except Exception as e:
+            print(f"DB Error: {e}")
+        finally:
+            conn.close()
+        return res
 
-def handle_client(conn, addr):
-    db_conn = get_db_connection()
-    cursor = db_conn.cursor()
+    def Register(self, request, context):
+        print(f"[REGISTER] {request.username}")
+        uid = self._execute("INSERT INTO users (username, password, role) VALUES (?, ?, ?)", 
+                            (request.username, request.password, request.role), commit=True)
+        if uid:
+            return ecommerce_pb2.RegisterResponse(success=True, message="Created", user_id=uid)
+        return ecommerce_pb2.RegisterResponse(success=False, message="User exists")
 
-    try:
-        while True:
-            msg = recv_msg(conn)
-            if not msg: break
-            
-            parts = msg.split("|")
-            req_type = parts[0]
-            
-            if req_type == "REGISTER":
-                role, user, pwd = parts[1], parts[2], parts[3]
-                try:
-                    with db_lock:
-                        cursor.execute("INSERT INTO users (username, password, role) VALUES (?, ?, ?)", 
-                                     (user, pwd, role))
-                        db_conn.commit()
-                        uid = cursor.lastrowid
-                    send_msg(conn, f"SUCCESS|{uid}")
-                except sqlite3.IntegrityError:
-                    send_msg(conn, "FAIL|User exists")
+    def Login(self, request, context):
+        row = self._execute("SELECT password FROM users WHERE username = ?", (request.username,), fetch_one=True)
+        if row and row[0] == request.password:
+            return ecommerce_pb2.LoginResponse(success=True, message="Login Success")
+        return ecommerce_pb2.LoginResponse(success=False, message="Invalid Credentials")
 
-            elif req_type == "LOGIN":
-                user, pwd = parts[1], parts[2]
-                cursor.execute("SELECT password FROM users WHERE username = ?", (user,))
-                row = cursor.fetchone()
-                if row and row[0] == pwd:
-                    send_msg(conn, "SUCCESS")
-                else:
-                    send_msg(conn, "FAIL|Invalid credentials")
-            
-            elif req_type == "SAVE_SESSION":
-                sess_id, user = parts[1], parts[2]
-                
-                cursor.execute("SELECT role, saved_cart, cart_version FROM users WHERE username = ?", (user,))
-                user_row = cursor.fetchone()
-                
-                cart_json = "[]"
-                cart_ver = 0
-                
-                if user_row:
-                    role = user_row[0]
-                    if role == "BUYER":
-                        cart_json = user_row[1]
-                        cart_ver = user_row[2]
+    def SaveSession(self, request, context):
+        user_row = self._execute("SELECT role, saved_cart, cart_version FROM users WHERE username = ?", (request.username,), fetch_one=True)
+        cart_json = "[]"
+        cart_ver = 0
+        if user_row and user_row[0] == "BUYER":
+            cart_json = user_row[1]
+            cart_ver = user_row[2]
 
-                with db_lock:
-                    cursor.execute("INSERT OR REPLACE INTO sessions (sess_id, username, last_active, current_cart, cart_version) VALUES (?, ?, ?, ?, ?)",
-                                   (sess_id, user, time.time(), cart_json, cart_ver))
-                    db_conn.commit()
-                
-                send_msg(conn, "SUCCESS")
+        self._execute("INSERT OR REPLACE INTO sessions (sess_id, username, last_active, current_cart, cart_version) VALUES (?, ?, ?, ?, ?)",
+                      (request.sess_id, request.username, time.time(), cart_json, cart_ver), commit=True)
+        return ecommerce_pb2.Empty()
 
-            elif req_type == "VALIDATE_SESSION":
-                sess_id = parts[1]
-                cursor.execute("SELECT username, last_active FROM sessions WHERE sess_id = ?", (sess_id,))
-                row = cursor.fetchone()
-                
-                if row:
-                    username, last_active = row
-                    if (time.time() - last_active) > 300: # 5 Mins
-                        with db_lock:
-                            cursor.execute("DELETE FROM sessions WHERE sess_id = ?", (sess_id,))
-                            db_conn.commit()
-                        send_msg(conn, "FAIL|Session Expired")
+    def ValidateSession(self, request, context):
+        row = self._execute("SELECT username, last_active FROM sessions WHERE sess_id = ?", (request.sess_id,), fetch_one=True)
+        if row:
+            if (time.time() - row[1]) > 300: 
+                self._execute("DELETE FROM sessions WHERE sess_id = ?", (request.sess_id,), commit=True)
+                return ecommerce_pb2.ValidateResponse(success=False, username="")
+            self._execute("UPDATE sessions SET last_active = ? WHERE sess_id = ?", (time.time(), request.sess_id), commit=True)
+            return ecommerce_pb2.ValidateResponse(success=True, username=row[0])
+        return ecommerce_pb2.ValidateResponse(success=False, username="")
+
+    def Logout(self, request, context):
+        self._execute("DELETE FROM sessions WHERE sess_id = ?", (request.sess_id,), commit=True)
+        return ecommerce_pb2.Empty()
+
+    def GetCart(self, request, context):
+        sess_row = self._execute("SELECT username, current_cart, cart_version FROM sessions WHERE sess_id = ?", (request.sess_id,), fetch_one=True)
+        if not sess_row: return ecommerce_pb2.CartResponse(success=False, cart_json="[]")
+        
+        username, sess_cart, sess_ver = sess_row
+        user_row = self._execute("SELECT saved_cart, cart_version FROM users WHERE username = ?", (username,), fetch_one=True)
+        
+        if user_row:
+            saved_cart, saved_ver = user_row
+            if saved_ver > sess_ver:
+                sess_cart = saved_cart
+                self._execute("UPDATE sessions SET current_cart = ?, cart_version = ? WHERE sess_id = ?", (sess_cart, saved_ver, request.sess_id), commit=True)
+        
+        return ecommerce_pb2.CartResponse(success=True, cart_json=sess_cart)
+
+    def AddToCart(self, request, context):
+        row = self._execute("SELECT current_cart FROM sessions WHERE sess_id = ?", (request.sess_id,), fetch_one=True)
+        if row:
+            cart = json.loads(row[0])
+            found = False
+            for item in cart:
+                if item['id'] == request.item_id:
+                    item['qty'] += request.qty
+                    found = True
+                    break
+            if not found: cart.append({'id': request.item_id, 'qty': request.qty})
+            self._execute("UPDATE sessions SET current_cart = ? WHERE sess_id = ?", (json.dumps(cart), request.sess_id), commit=True)
+            return ecommerce_pb2.ResponseMsg(success=True)
+        return ecommerce_pb2.ResponseMsg(success=False, message="Invalid Session")
+
+    def RemoveFromCart(self, request, context):
+        row = self._execute("SELECT current_cart FROM sessions WHERE sess_id = ?", (request.sess_id,), fetch_one=True)
+        if row:
+            cart = json.loads(row[0])
+            new_cart = []
+            item_found = False
+            error_msg = None
+
+            for item in cart:
+                if item['id'] == request.item_id:
+                    item_found = True
+                    
+                    if request.qty > item['qty']:
+                        error_msg = f"Cannot remove {request.qty}. You only have {item['qty']} in cart."
+                        new_cart.append(item) 
+                    elif request.qty == item['qty']:
+                        pass 
                     else:
-                        with db_lock:
-                            cursor.execute("UPDATE sessions SET last_active = ? WHERE sess_id = ?", (time.time(), sess_id))
-                            db_conn.commit()
-                        send_msg(conn, f"SUCCESS|{username}")
+                        item['qty'] -= request.qty
+                        new_cart.append(item)
                 else:
-                    send_msg(conn, "FAIL|Invalid Session")
+                    new_cart.append(item)
 
-            elif req_type == "LOGOUT":
-                sess_id = parts[1]
-                with db_lock:
-                    cursor.execute("DELETE FROM sessions WHERE sess_id = ?", (sess_id,))
-                    db_conn.commit()
-                send_msg(conn, "SUCCESS")
+            if not item_found:
+                return ecommerce_pb2.ResponseMsg(success=False, message="Item not in cart")
+            
+            if error_msg:
+                return ecommerce_pb2.ResponseMsg(success=False, message=error_msg)
 
-            elif req_type == "SAVE_CART":
-                sess_id = parts[1]
-                
-                cursor.execute("SELECT username, current_cart FROM sessions WHERE sess_id = ?", (sess_id,))
-                row = cursor.fetchone()
-                
-                if row:
-                    username, sess_cart_json = row
-                    
-                    with db_lock:
-                        cursor.execute("SELECT cart_version FROM users WHERE username = ?", (username,))
-                        ver_row = cursor.fetchone()
-                        new_ver = (ver_row[0] if ver_row else 0) + 1
+            self._execute("UPDATE sessions SET current_cart = ? WHERE sess_id = ?", (json.dumps(new_cart), request.sess_id), commit=True)
+            return ecommerce_pb2.ResponseMsg(success=True, message="Item removed")
+            
+        return ecommerce_pb2.ResponseMsg(success=False, message="Session Invalid")
 
-                        cursor.execute("UPDATE users SET saved_cart = ?, cart_version = ? WHERE username = ?", 
-                                       (sess_cart_json, new_ver, username))
-                        
-                        cursor.execute("UPDATE sessions SET cart_version = ? WHERE sess_id = ?", (new_ver, sess_id))
-                        db_conn.commit()
-                        
-                    send_msg(conn, "SUCCESS")
-                else:
-                    send_msg(conn, "FAIL")
+    def ClearCart(self, request, context):
+        self._execute("UPDATE sessions SET current_cart = '[]' WHERE sess_id = ?", (request.sess_id,), commit=True)
+        return ecommerce_pb2.Empty()
 
-            elif req_type == "GET_CART":
-                sess_id = parts[1]
-                cursor.execute("SELECT username, current_cart, cart_version FROM sessions WHERE sess_id = ?", (sess_id,))
-                sess_row = cursor.fetchone()
-                
-                if sess_row:
-                    username, sess_cart_json, sess_ver = sess_row
-                    
-                    cursor.execute("SELECT saved_cart, cart_version FROM users WHERE username = ?", (username,))
-                    user_row = cursor.fetchone()
-                    
-                    final_cart_json = sess_cart_json
-                    
-                    if user_row:
-                        saved_cart_json, saved_ver = user_row
-                        if saved_ver > sess_ver:
-                            final_cart_json = saved_cart_json
-                            with db_lock:
-                                cursor.execute("UPDATE sessions SET current_cart = ?, cart_version = ? WHERE sess_id = ?", 
-                                               (final_cart_json, saved_ver, sess_id))
-                                db_conn.commit()
+    def SaveCart(self, request, context):
+        row = self._execute("SELECT username, current_cart FROM sessions WHERE sess_id = ?", (request.sess_id,), fetch_one=True)
+        if row:
+            username, sess_cart = row
+            ver_row = self._execute("SELECT cart_version FROM users WHERE username = ?", (username,), fetch_one=True)
+            new_ver = (ver_row[0] if ver_row else 0) + 1
+            
+            self._execute("UPDATE users SET saved_cart = ?, cart_version = ? WHERE username = ?", (sess_cart, new_ver, username), commit=True)
+            self._execute("UPDATE sessions SET cart_version = ? WHERE sess_id = ?", (new_ver, request.sess_id), commit=True)
+            return ecommerce_pb2.ResponseMsg(success=True)
+        return ecommerce_pb2.ResponseMsg(success=False)
+    
 
-                    send_msg(conn, f"SUCCESS|{json.dumps({'cart': json.loads(final_cart_json)})}")
-                else:
-                    send_msg(conn, "FAIL")
+    def AddPurchasedItems(self, request, context):
+        row = self._execute("SELECT purchase_history FROM users WHERE username = ?", (request.username,), fetch_one=True)
+        if row:
+            history = json.loads(row[0])
+            new_items = json.loads(request.items_json)
+            history.extend(new_items)
+            
+            self._execute("UPDATE users SET purchase_history = ? WHERE username = ?", (json.dumps(history), request.username), commit=True)
+        return ecommerce_pb2.Empty()
 
-            elif req_type == "GET_USER_DATA":
-                target = parts[1]
-                if target.isdigit():
-                    cursor.execute("SELECT * FROM users WHERE id = ?", (int(target),))
-                else:
-                    cursor.execute("SELECT * FROM users WHERE username = ?", (target,))
-                
-                row = cursor.fetchone()
-                if row:
-                    user_data = {
-                        "id": row[0],
-                        "role": row[3],
-                        "feedback": {"up": row[4], "down": row[5]},
-                        "items_traded": row[6],
-                        "purchase_history": json.loads(row[9])
-                    }
-                    send_msg(conn, f"SUCCESS|{json.dumps(user_data)}")
-                else:
-                    send_msg(conn, "FAIL|User not found")
+    def GetUserData(self, request, context):
+        if request.query.isdigit():
+            row = self._execute("SELECT * FROM users WHERE id = ?", (int(request.query),), fetch_one=True)
+        else:
+            row = self._execute("SELECT * FROM users WHERE username = ?", (request.query,), fetch_one=True)
+        
+        if row:
+            return ecommerce_pb2.UserResponse(success=True, id=row[0], role=row[3], fb_up=row[4], fb_down=row[5], purchase_history_json=row[8])
+        return ecommerce_pb2.UserResponse(success=False)
 
-            elif req_type == "CART_OP":
-                sess_id, op = parts[1], parts[2]
-                
-                cursor.execute("SELECT current_cart FROM sessions WHERE sess_id = ?", (sess_id,))
-                row = cursor.fetchone()
-                
-                if row:
-                    cart = json.loads(row[0])
-                    
-                    if op == "add":
-                        item_id, qty = parts[3], int(parts[4])
-                        found = False
-                        for item in cart:
-                            if item['id'] == item_id:
-                                item['qty'] += qty
-                                found = True
-                                break
-                        if not found:
-                            cart.append({'id': item_id, 'qty': qty})
-                    
-                    elif op == "remove":
-                        item_id, qty = parts[3], int(parts[4])
-                        current_total = 0
-                        for item in cart:
-                             if item['id'] == item_id: current_total += item['qty']
+def serve():
+    init_db()
+    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+    ecommerce_pb2_grpc.add_CustomerServiceServicer_to_server(CustomerService(), server)
+    server.add_insecure_port('[::]:50051')
+    print("Customer DB (gRPC) running on 50051...")
+    server.start()
+    server.wait_for_termination()
 
-                        if qty > current_total:
-                             pass 
-                        else:
-                            new_cart = []
-                            for item in cart:
-                                if item['id'] == item_id and qty > 0:
-                                     if item['qty'] > qty:
-                                         item['qty'] -= qty
-                                         new_cart.append(item)
-                                         qty = 0
-                                     else: 
-                                         qty -= item['qty']
-                                else:
-                                    new_cart.append(item)
-                            cart = new_cart
-                    
-                    elif op == "clear":
-                        cart = []
-                    
-                    with db_lock:
-                        cursor.execute("UPDATE sessions SET current_cart = ? WHERE sess_id = ?", 
-                                       (json.dumps(cart), sess_id))
-                        db_conn.commit()
-                        
-                    send_msg(conn, "SUCCESS")
-                else:
-                    send_msg(conn, "FAIL")
-                    
-            elif req_type == "UPDATE_FEEDBACK":
-                target, type_ = parts[1], parts[2]
-                col = "feedback_up" if type_ == "up" else "feedback_down"
-                with db_lock:
-                    if type_ == "up":
-                        cursor.execute("UPDATE users SET feedback_up = feedback_up + 1 WHERE username = ?", (target,))
-                    else:
-                        cursor.execute("UPDATE users SET feedback_down = feedback_down + 1 WHERE username = ?", (target,))
-                    db_conn.commit()
-                send_msg(conn, "SUCCESS")
-
-    except Exception as e:
-        print(f"DB Error: {e}")
-    finally:
-        db_conn.close()
-        conn.close()
-
-def main():
-    init_db() 
-    server = TCPServer.start_listening(5001)
-    print("[DATABASE] Customer DB (SQL) running on 5001...")
-    while True:
-        conn, addr = server.accept()
-        threading.Thread(target=handle_client, args=(conn, addr), daemon=True).start()
-
-if __name__ == "__main__":
-    main()
+if __name__ == '__main__':
+    serve()

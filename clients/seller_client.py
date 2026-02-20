@@ -1,133 +1,134 @@
-import time 
-from common.tcp_base import TCPClient
+import requests
+import json
+import re
+import sys
 
-def start():
-    client = TCPClient('localhost', 8000)
-    try:
-        client.connect()
-    except Exception as e:
-        print(f"[-] Could not able to connect to Seller Server: {e}")
-        return
+#BASE_URL = "http://localhost:5001"
+BASE_URL = "35.184.65.235"
+sess_id = None
 
-    sess_id = None 
-    last_active = 0 
-    
+def get_input(prompt, data_type=str, error_msg="Invalid input", regex=None):
     while True:
-        print("\n--- SELLER INTERFACE ---")
-        print("1. Create Account")          
-        print("2. Login")                   
-        print("3. Register Item")           
-        print("4. Change Item Price")       
-        print("5. Update Units (Remove)")   
-        print("6. Display My Items")        
-        print("7. Get Seller Rating")       
-        print("8. Logout")                  
-        
-        menu_option = input("Select: ")
+        value = input(prompt).strip()
+        if not value: print("[-] Input cannot be empty."); continue
+        try:
+            if data_type == int:
+                converted = int(value)
+                if converted < 0: print("[-] Must be positive."); continue
+                return converted
+            elif data_type == float:
+                converted = float(value)
+                if converted < 0: print("[-] Must be positive."); continue
+                return converted
+        except ValueError:
+            print(f"[-] {error_msg}"); continue
 
+        if regex and not re.match(regex, value):
+            print(f"[-] {error_msg}"); continue
+        return value
+
+def handle_response(response):
+    global sess_id
+    try:
+        data = response.json()
+    except:
+        print("[-] Server Error."); return None
+
+    if data.get("status") == "FAIL":
+        print(f"[-] Error: {data.get('message')}")
+        if data.get("message") == "Login First":
+            print("[-] Logged out."); sess_id = None
+        return None
+    return data
+
+while True:
+    print("\n--- SELLER MENU (REST) ---")
+    print(f"Status: {'[ACTIVE]' if sess_id else '[OFFLINE]'}")
+    print("1. Create Account")
+    print("2. Login")
+    print("3. Register Item")
+    print("4. My Items")
+    print("5. Update Price")
+    print("6. Remove Stock")
+    print("7. My Rating")
+    print("8. Logout")
+    
+    c = input("Choice: ")
+    
+    try:
+        if c == "1":
+            u = get_input("User: "); p = get_input("Pass: ")
+            r = requests.post(f"{BASE_URL}/create_account", json={"username": u, "password": p})
+            d = handle_response(r)
+            if d and d['status'] == "SUCCESS": print(f"[+] Account Created. ID: {d.get('uid')}")
+
+        elif c == "2":
+            u = get_input("User: "); p = get_input("Pass: ")
+            r = requests.post(f"{BASE_URL}/login", json={"username": u, "password": p})
+            d = handle_response(r)
+            if d and d['status'] == "SUCCESS": sess_id = d['sess_id']; print("[+] Logged In")
+
+        elif c == "3":
+            if not sess_id: print("[-] Login First!"); continue
+            data = {
+                "sess_id": sess_id,
+                "name": get_input("Name: "),
+                "category": get_input("Cat ID: ", int, "Must be a number"),
+                "keywords": get_input("Keywords: "),
+                "condition": get_input("Condition (New/Used): ", str, regex=r"^(New|Used)$", error_msg="Enter 'New' or 'Used'"),
+                "price": get_input("Price: ", float, "Must be number"),
+                "quantity": get_input("Qty: ", int, "Must be integer")
+            }
+            r = requests.post(f"{BASE_URL}/items", json=data)
+            d = handle_response(r)
+            if d and d['status'] == "SUCCESS": print(f"[+] Item Registered! ID: {d.get('item_id')}")
+
+        elif c == "4":
+            if not sess_id: print("[-] Login First!"); continue
+            r = requests.get(f"{BASE_URL}/items", params={"sess_id": sess_id})
+            d = handle_response(r)
+            if d: 
+                print("\n--- YOUR ITEMS ---")
+                for item in d.get("items", []): print(item)
+
+        elif c == "5":
+            if not sess_id: print("[-] Login First!"); continue
+            iid = get_input("Item ID: ", str, regex=r"^\d+\.\d+$")
+            p = get_input("New Price: ", float)
+            r = requests.put(f"{BASE_URL}/items", json={"sess_id": sess_id, "item_id": iid, "price": p})
+            d = handle_response(r)
+            if d and d['status'] == "SUCCESS": print("[+] Price Updated")
+
+        elif c == "6":
+            if not sess_id: print("[-] Login First!"); continue
+            iid = get_input("Item ID: ", str, regex=r"^\d+\.\d+$")
+            q = get_input("Qty to remove: ", int)
+            r = requests.post(f"{BASE_URL}/update_qty", json={"sess_id": sess_id, "item_id": iid, "qty": q})
+            d = handle_response(r)
+            if d and d['status'] == "SUCCESS": print("[+] Stock Updated")
+
+        elif c == "7":
+            if not sess_id: print("[-] Login First!"); continue
+            r = requests.get(f"{BASE_URL}/rating", params={"sess_id": sess_id})
+            d = handle_response(r)
+            if d: print(f"Rating: {d}")
+
+        elif c == "8":
+            if sess_id: requests.post(f"{BASE_URL}/logout", json={"sess_id": sess_id}); sess_id = None
+            print("[+] Logged Out")
+            break
+
+    except KeyboardInterrupt:
+        print("\n\n[!] Force Exit Detected (Ctrl+C).")
         if sess_id:
-            if (time.time() - last_active) > 300: 
-                print("\n[-] Session Expired (Timeout). Please Login again.")
-                try:
-                    client.send_receive(f"LOGOUT|{sess_id}")
-                except:
-                    pass
-                sess_id = None
-
-        msg = None
-
-        if menu_option == "1":
-            u = input("Username: ")
-            p = input("Password: ")
-            msg = f"CREATE_ACCOUNT|{u}|{p}"
-        elif menu_option == "2":
-            u = input("Username: ")
-            p = input("Password: ")
-            msg = f"LOGIN|{u}|{p}"
-        elif menu_option == "3":
-            if not sess_id: print("Login first!"); continue
-            name = input("Item Name (max 32 chars): ")
-            cat = input("Category (Int): ")
-            kws = input("Keywords (max 5, comma sep): ")
-            cond = input("Condition (New/Used): ")
-            price = input("Price: ")
-            qty = input("Quantity: ")
-            if not cat.isdigit() or not qty.isdigit():
-                print("[-] Error: Category and Quantity must be integers.")
-                continue
+            print("[*] Attempting to clean up seller session...")
             try:
-                float(price) 
-            except ValueError:
-                print("[-] Error: Price must be a number.")
-                continue
-            msg = f"REGISTER_ITEM|{sess_id}|{name}|{cat}|{kws}|{cond}|{price}|{qty}"
-        elif menu_option == "4":
-            if not sess_id: print("Login first!"); continue
-            iid = input("Item ID: ")
-            price = input("New Price: ")
-            try:
-                float(price)
-            except ValueError:
-                print("[-] Error: Price must be a number.")
-                continue
-            msg = f"CHANGE_PRICE|{sess_id}|{iid}|{price}"
-        elif menu_option == "5":
-            if not sess_id: print("Login first!"); continue
-            iid = input("Item ID: ")
-            qty = input("Quantity to REMOVE: ")
-            if not qty.isdigit():
-                print("[-] Error: Quantity must be an integer.")
-                continue
-            msg = f"UPDATE_UNITS|{sess_id}|{iid}|{qty}"
-        elif menu_option == "6":
-            if not sess_id: print("Login first!"); continue
-            msg = f"DISPLAY_ITEMS|{sess_id}"
-        elif menu_option == "7":
-            if not sess_id: print("Login first!"); continue
-            msg = f"GET_RATING|{sess_id}"
-        elif menu_option == "8":
-            if sess_id: 
-                msg = f"LOGOUT|{sess_id}"
-            else:
-                break
-        else:
-            print("Invalid choice.")
-            continue
+                requests.post(f"{BASE_URL}/logout", json={"sess_id": sess_id}, timeout=2)
+                print("[+] Session Logged Out Successfully.")
+            except:
+                print("[-] Could not tell Server we are leaving.")
+        print("Goodbye Seller!")
+        sys.exit(0)
 
-        if not msg and menu_option == "8": break
-
-        if msg:
-            resp = client.send_receive(msg)
-
-            if not resp or "FAIL|Connection Error" in resp:
-                print("[-] Server Disconnected.")
-                break
-
-            if "SUCCESS" in resp:
-                last_active = time.time() 
-
-            if "FAIL|Session Expired" in resp or "FAIL|Login First" in resp:
-                 print(f"[-] Server said: {resp.split('|')[1]}")
-                 if "Expired" in resp:
-                     sess_id = None
-
-            if menu_option == "2" and "SUCCESS" in resp:
-                sess_id = resp.split("|")[1]
-                last_active = time.time()
-                print(f"[+] Logged in. Session ID: {sess_id}")
-            elif menu_option == "6" and "SUCCESS" in resp:
-                print("--- My Items ---")
-                print(resp.replace("SUCCESS|", "")) 
-            elif menu_option == "7" and "SUCCESS" in resp:
-                print("Rating:", resp.replace("SUCCESS|", ""))
-            elif menu_option == "8":
-                sess_id = None
-                print("Logged out.")
-                break
-            else:
-                print("Server:", resp)
-
-    client.close()
-
-if __name__ == "__main__":
-    start()
+    except Exception as e:
+        print(f"[-] Connection Error: {e}")

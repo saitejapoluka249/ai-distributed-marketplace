@@ -1,0 +1,157 @@
+syntax = "proto3";
+
+package ecommerce;
+
+service CustomerService {
+    rpc Register (RegisterRequest) returns (RegisterResponse);
+    rpc Login (LoginRequest) returns (LoginResponse);
+    rpc SaveSession (SessionRequest) returns (Empty);
+    rpc ValidateSession (SessionRequest) returns (ValidateResponse);
+    rpc Logout (SessionRequest) returns (Empty);
+    rpc GetUserData (UserRequest) returns (UserResponse);
+    rpc UpdateFeedback (FeedbackRequest) returns (Empty);
+    
+    rpc GetCart (SessionRequest) returns (CartResponse);
+    rpc AddToCart (CartItemRequest) returns (ResponseMsg);
+    rpc RemoveFromCart (CartItemRequest) returns (ResponseMsg);
+    rpc ClearCart (SessionRequest) returns (Empty);
+    rpc SaveCart (SessionRequest) returns (ResponseMsg);
+    rpc AddPurchasedItems (PurchaseRequest) returns (Empty);
+}
+
+service ProductService {
+    rpc RegisterItem (ItemRequest) returns (ItemResponse);
+    rpc GetItem (IDRequest) returns (ItemResponse);
+    rpc SearchItems (SearchRequest) returns (SearchResponse);
+    rpc GetSellerItems (UserRequest) returns (SearchResponse);
+    rpc UpdatePrice (UpdatePriceRequest) returns (ResponseMsg);
+    rpc UpdateQty (UpdateQtyRequest) returns (ResponseMsg);
+    rpc UpdateItemFeedback (FeedbackRequest) returns (Empty);
+
+    rpc GetSellerStats (UserRequest) returns (RatingResponse);
+}
+
+message Empty {}
+
+message ResponseMsg {
+    bool success = 1;
+    string message = 2;
+}
+
+message RegisterRequest {
+    string username = 1;
+    string password = 2;
+    string role = 3;
+}
+
+message RegisterResponse {
+    bool success = 1;
+    string message = 2;
+    int32 user_id = 3;
+}
+
+message LoginRequest {
+    string username = 1;
+    string password = 2;
+}
+
+message LoginResponse {
+    bool success = 1;
+    string message = 2;
+}
+
+message SessionRequest {
+    string sess_id = 1;
+    string username = 2; 
+}
+
+message ValidateResponse {
+    bool success = 1;
+    string username = 2;
+}
+
+message UserRequest {
+    string query = 1; 
+}
+
+message UserResponse {
+    bool success = 1;
+    int32 id = 2;
+    string role = 3;
+    int32 fb_up = 4;
+    int32 fb_down = 5;
+    string purchase_history_json = 6;
+}
+
+message RatingResponse {
+    int32 up = 1;
+    int32 down = 2;
+    string status = 3;   
+    string message = 4;  
+}
+
+message FeedbackRequest {
+    string target_id = 1; 
+    string type = 2; 
+}
+
+message ItemRequest {
+    string name = 1;
+    int32 category = 2;
+    string keywords = 3;
+    string condition = 4;
+    double price = 5;
+    int32 quantity = 6;
+    string seller = 7;
+}
+
+message ItemResponse {
+    bool success = 1;
+    string item_id = 2;
+    string name = 3;
+    double price = 4;
+    int32 quantity = 5;
+    string seller = 6;
+    int32 fb_up = 7;
+    int32 fb_down = 8;
+    string condition = 9;
+}
+
+message IDRequest {
+    string id = 1;
+}
+
+message SearchRequest {
+    int32 category = 1;
+    string keywords = 2;
+}
+
+message SearchResponse {
+    repeated string item_lines = 1; 
+}
+
+message UpdatePriceRequest {
+    string item_id = 1;
+    double new_price = 2;
+}
+
+message UpdateQtyRequest {
+    string item_id = 1;
+    int32 qty_change = 2; 
+}
+
+message CartItemRequest {
+    string sess_id = 1;
+    string item_id = 2;
+    int32 qty = 3;
+}
+
+message CartResponse {
+    bool success = 1;
+    string cart_json = 2;
+}
+
+message PurchaseRequest {
+    string username = 1;
+    string items_json = 2;
+}
