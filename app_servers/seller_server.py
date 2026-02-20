@@ -109,4 +109,4 @@ def get_rating():
 
 if __name__ == '__main__':
     print("Seller Server (REST) running on 5001...")
-    app.run(host='0.0.0.0', port=5003, debug=False, threaded=True)
+    app.run(host='0.0.0.0', port=5001, debug=False, threaded=True)
