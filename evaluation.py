@@ -1,142 +1,149 @@
+import requests
 import threading
 import time
-import random
-import string
-from common.tcp_base import TCPClient
+import uuid
+import statistics
 
-BUYER_SERVER_ADDRESS = ('localhost', 8001)
-SELLER_SERVER_ADDRESS = ('localhost', 8000)
+# --- CONFIGURATION (UPDATE THESE IPs) ---
+BUYER_SERVER_URL = "http://10.128.0.4:5003"
+SELLER_SERVER_URL = "http://10.128.0.5:5001"
+
 NUMBER_OF_REQUESTS_PER_CLIENT = 1000  
-NUMBER_OF_RUNS = 10  
+NUMBER_OF_RUNS = 10                  
 
-def generate_random_str(length=8):
-    return ''.join(random.choices(string.ascii_letters, k=length))
-
-def run_buyer_session(client_id, latencies, lock):
-    """Simulates a single buyer using the robust TCPClient."""
-    client = TCPClient(BUYER_SERVER_ADDRESS[0], BUYER_SERVER_ADDRESS[1])
+def run_buyer_session(bot_id, latencies, lock):
+    """Simulates a RESTful buyer bot performing 1000 searches."""
+    session = requests.Session() 
+    username = f"b_bot_{bot_id}_{uuid.uuid4().hex[:4]}"
+    password = "pass"
+    
     try:
-        client.connect()
+        # 1. Create Account
+        session.post(f"{BUYER_SERVER_URL}/create_account", json={"username": username, "password": password})
         
-        username = f"user_{client_id}_{generate_random_str()}"
-        password = "password"
+        # 2. Login
+        login_resp = session.post(f"{BUYER_SERVER_URL}/login", json={"username": username, "password": password})
+        data = login_resp.json()
         
-        client.send_receive(f"CREATE_ACCOUNT|{username}|{password}")
-        resp = client.send_receive(f"LOGIN|{username}|{password}")
-        
-        if not resp or "SUCCESS" not in resp:
-            client.close()
+        if data.get("status") != "SUCCESS":
+            print(f"Buyer {bot_id} Login Failed: {data}")
             return
-        
-        sid = resp.split("|")[1]
-        
-        for i in range(NUMBER_OF_REQUESTS_PER_CLIENT):
-            start = time.perf_counter() 
-            resp = client.send_receive(f"SEARCH|{sid}|1|shoes") 
             
-            if not resp or "FAIL" in resp:
-                break
-
+        # 3. Perform 1000 API Calls (Search Items)
+        for _ in range(NUMBER_OF_REQUESTS_PER_CLIENT):
+            start = time.perf_counter()
+            
+            # Calling your GET /search route
+            resp = session.get(f"{BUYER_SERVER_URL}/search", params={"category": 1, "keywords": "test"})
+            
             end = time.perf_counter()
-            with lock:
-                latencies.append(end - start)
+            
+            if resp.status_code == 200 and resp.json().get("status") == "SUCCESS":
+                with lock:
+                    latencies.append(end - start)
+            else:
+                break
                 
     except Exception as e:
-        print(f"Buyer {client_id} Exception: {e}")
-    finally:
-        client.close()
+        pass # Ignore connection drops during heavy load to keep calculating averages
 
-def run_seller_session(client_id, latencies, lock):
-    """Simulates a single seller using the robust TCPClient."""
-    client = TCPClient(SELLER_SERVER_ADDRESS[0], SELLER_SERVER_ADDRESS[1])
+def run_seller_session(bot_id, latencies, lock):
+    """Simulates a RESTful seller bot performing 1000 rating checks."""
+    session = requests.Session()
+    username = f"s_bot_{bot_id}_{uuid.uuid4().hex[:4]}"
+    password = "pass"
+    
     try:
-        client.connect()
+        # 1. Create Account
+        session.post(f"{SELLER_SERVER_URL}/create_account", json={"username": username, "password": password})
         
-        username = f"seller_{client_id}_{generate_random_str()}"
-        password = "password"
+        # 2. Login
+        login_resp = session.post(f"{SELLER_SERVER_URL}/login", json={"username": username, "password": password})
+        data = login_resp.json()
         
-        client.send_receive(f"CREATE_ACCOUNT|{username}|{password}")
-        resp = client.send_receive(f"LOGIN|{username}|{password}")
-        
-        if not resp or "SUCCESS" not in resp:
-            client.close()
+        if data.get("status") != "SUCCESS":
+            print(f"Seller {bot_id} Login Failed: {data}")
             return
-
-        sid = resp.split("|")[1]
-        
-        for i in range(NUMBER_OF_REQUESTS_PER_CLIENT):
-            start = time.perf_counter()
-            resp = client.send_receive(f"GET_RATING|{sid}")
             
-            if not resp or "FAIL" in resp:
+        sess_id = data.get("sess_id")
+
+        # 3. Perform 1000 API Calls (Get Rating)
+        for _ in range(NUMBER_OF_REQUESTS_PER_CLIENT):
+            start = time.perf_counter()
+            
+            # Calling your GET /rating route
+            resp = session.get(f"{SELLER_SERVER_URL}/rating", params={"sess_id": sess_id})
+            
+            end = time.perf_counter()
+            
+            # Your seller rating route returns {"up": X, "down": Y}, so we just check status_code 200
+            if resp.status_code == 200:
+                with lock:
+                    latencies.append(end - start)
+            else:
                 break
 
-            end = time.perf_counter()
-            with lock:
-                latencies.append(end - start)
-
     except Exception as e:
-        print(f"Seller {client_id} Exception: {e}")
-    finally:
-        client.close()
+        pass
 
-def run_batch(num_buyers, num_sellers, run_idx):
-    """Runs a single iteration of the experiment."""
+def run_experiment(num_buyers, num_sellers, run_idx):
+    """Executes a single run of concurrent users."""
     latencies = []
     lock = threading.Lock()
     threads = []
     
-    start_time_global = time.perf_counter()
+    start_wall_time = time.perf_counter()
     
     for i in range(num_buyers):
         t = threading.Thread(target=run_buyer_session, args=(i, latencies, lock))
         threads.append(t)
-        t.start()
-        
     for i in range(num_sellers):
         t = threading.Thread(target=run_seller_session, args=(i, latencies, lock))
         threads.append(t)
-        t.start()
         
-    for t in threads:
-        t.join()
+    for t in threads: t.start()
+    for t in threads: t.join()
         
-    end_time_global = time.perf_counter()
-    total_duration = end_time_global - start_time_global
+    end_wall_time = time.perf_counter()
     
-    total_opts = len(latencies)
-    average_resp_time = (sum(latencies) / total_opts) * 1000 if total_opts > 0 else 0
-    throughput = total_opts / total_duration if total_duration > 0 else 0
+    total_duration = end_wall_time - start_wall_time
+    total_ops = len(latencies)
     
-    print(f"   Run {run_idx+1}: {average_resp_time:.2f} ms | {throughput:.2f} ops/sec")
+    avg_latency = (sum(latencies) / total_ops) * 1000 if total_ops > 0 else 0
+    throughput = total_ops / total_duration if total_duration > 0 else 0
     
-    return average_resp_time, throughput
+    print(f"   Run {run_idx+1}: {avg_latency:.2f} ms | {throughput:.2f} ops/sec")
+    return avg_latency, throughput
 
-def run_scenarios(num_buyers, num_sellers):
-    """Runs the experiment multiple times and calculates average."""
-    print(f"\n=======================================================")
-    print(f"SCENARIO: {num_buyers} Buyers, {num_sellers} Sellers | {NUMBER_OF_RUNS} Runs")
-    print(f"=======================================================")
+def evaluate_scenario(num_buyers, num_sellers):
+    """Averages metrics over 10 runs for a specific scenario."""
+    print(f"\n" + "="*60)
+    print(f"SCENARIO: {num_buyers} Buyers & {num_sellers} Sellers")
+    print(f"Target: {num_buyers+num_sellers} clients x {NUMBER_OF_REQUESTS_PER_CLIENT} calls")
+    print("="*60)
     
-    scenarios_latency = []
-    scenarios_throughput = []
+    run_latencies = []
+    run_throughputs = []
     
     for i in range(NUMBER_OF_RUNS):
-        lat, thr = run_batch(num_buyers, num_sellers, i)
-        scenarios_latency.append(lat)
-        scenarios_throughput.append(thr)
-        time.sleep(1) # Short cooldown between runs
+        lat, thr = run_experiment(num_buyers, num_sellers, i)
+        run_latencies.append(lat)
+        run_throughputs.append(thr)
+        time.sleep(1) # Let the servers breathe between runs
         
-    avg_lat = sum(scenarios_latency) / len(scenarios_latency)
-    avg_thr = sum(scenarios_throughput) / len(scenarios_throughput)
+    final_avg_lat = statistics.mean(run_latencies)
+    final_avg_thr = statistics.mean(run_throughputs)
     
-    print(f"-------------------------------------------------------")
-    print(f"FINAL AVERAGE >> Latency: {avg_lat:.2f} ms | Throughput: {avg_thr:.2f} ops/sec")
-    print(f"-------------------------------------------------------\n")
+    print(f"-"*60)
+    print(f"FINAL AVERAGE >> Latency: {final_avg_lat:.2f} ms | Throughput: {final_avg_thr:.2f} ops/sec")
+    print(f"-"*60)
 
 if __name__ == "__main__":
-    run_scenarios(1, 1)
+    # Scenario 1
+    #evaluate_scenario(1, 1)
     
-    run_scenarios(10, 10)
-
-    run_scenarios(100, 100)
+    # Scenario 2
+    evaluate_scenario(10, 10)
+    
+    # Scenario 3
+    # evaluate_scenario(100, 100)
