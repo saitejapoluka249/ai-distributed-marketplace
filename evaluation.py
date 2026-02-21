@@ -3,7 +3,6 @@ import threading
 import time
 import uuid
 
-# --- SERVER ENDPOINTS ---
 BUYER_API = "http://10.128.0.10:5003"
 SELLER_API = "http://10.128.0.11:5001"
 
@@ -17,12 +16,10 @@ def setup_client_session(user_type, index):
     base_url = BUYER_API if user_type == "buyer" else SELLER_API
     
     try:
-        # Create user (ignore if already exists)
         req_session.post(f"{base_url}/create_account", json={"username": uid, "password": "123"})
     except Exception:
         pass
         
-    # Login and save session token
     login_response = req_session.post(f"{base_url}/login", json={"username": uid, "password": "123"})
     if login_response.status_code == 200:
         return req_session, login_response.json().get("sess_id")
@@ -55,25 +52,21 @@ def execute_iteration(buyers_count, sellers_count, b_sessions, s_sessions, itera
     
     clock_start = time.perf_counter()
 
-    # Launching buyers
     for idx in range(buyers_count):
         session, s_id = b_sessions[idx]
         if s_id:
             th = threading.Thread(target=execute_workload, args=("buyer", session, s_id, latencies, thread_lock))
             worker_threads.append(th)
             th.start()
-            # Stagger threads to prevent connection drops
             if buyers_count + sellers_count > 50:
                 time.sleep(0.001)
 
-    # Launching sellers
     for idx in range(sellers_count):
         session, s_id = s_sessions[idx]
         if s_id:
             th = threading.Thread(target=execute_workload, args=("seller", session, s_id, latencies, thread_lock))
             worker_threads.append(th)
             th.start()
-            # Stagger threads to prevent connection drops
             if buyers_count + sellers_count > 50:
                 time.sleep(0.001)
 
@@ -109,7 +102,7 @@ def benchmark_scenario(b_count, s_count):
         lat, thr = execute_iteration(b_count, s_count, b_sessions, s_sessions, i + 1)
         scenario_latencies.append(lat)
         scenario_throughputs.append(thr)
-        time.sleep(1.5) # Brief pause between iterations
+        time.sleep(1.5) 
         
     overall_lat = sum(scenario_latencies) / len(scenario_latencies)
     overall_thr = sum(scenario_throughputs) / len(scenario_throughputs)
@@ -129,7 +122,6 @@ if __name__ == "__main__":
         lat, thr = benchmark_scenario(b, s)
         metrics.append((b, s, lat, thr))
         
-    # Unique Summary Output
     print("\n\n" + "*" * 65)
     print("FINAL PERFORMANCE REPORT")
     print("*" * 65)
