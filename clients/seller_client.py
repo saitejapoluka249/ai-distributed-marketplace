@@ -3,8 +3,7 @@ import json
 import re
 import sys
 
-#BASE_URL = "http://localhost:5001"
-BASE_URL = "http://34.42.240.173:5001"
+BASE_URL = "http://localhost:7001"
 sess_id = None
 
 def get_input(prompt, data_type=str, error_msg="Invalid input", regex=None):

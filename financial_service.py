@@ -33,6 +33,6 @@ application = Application([FinancialService], 'tns.financial',
 wsgi_app = WsgiApplication(application)
 
 if __name__ == '__main__':
-    print("Financial Service (SOAP) running on 8003...")
-    server = make_server('0.0.0.0', 8003, wsgi_app)
+    print("Financial Service (SOAP) running on 9003...")
+    server = make_server('0.0.0.0', 9003, wsgi_app)
     server.serve_forever()

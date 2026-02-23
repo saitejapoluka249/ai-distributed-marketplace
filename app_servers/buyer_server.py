@@ -4,20 +4,28 @@ import ecommerce_pb2
 import ecommerce_pb2_grpc
 import json
 import re
+import os
+from dotenv import load_dotenv
 from zeep import Client as SoapClient 
 
+load_dotenv()
+
 app = Flask(__name__)
+
+BUYER_SERVER_HOST = os.getenv("BUYER_SERVER_HOST", "0.0.0.0")
+BUYER_SERVER_PORT = int(os.getenv("BUYER_SERVER_PORT", 7003))
+
+CUSTOMER_DB_ADDR = f"{os.getenv('CUSTOMER_DB_HOST')}:{os.getenv('CUSTOMER_DB_PORT')}"
+PRODUCT_DB_ADDR  = f"{os.getenv('PRODUCT_DB_HOST')}:{os.getenv('PRODUCT_DB_PORT')}"
 
 channel_options = [
     ('grpc.max_concurrent_streams', 200),
     ('grpc.keepalive_time_ms', 10000),
     ('grpc.keepalive_timeout_ms', 5000),
 ]
-#cust_channel = grpc.insecure_channel('localhost:50051')
-cust_channel = grpc.insecure_channel('10.128.0.8:50051',options=channel_options)
+cust_channel = grpc.insecure_channel(CUSTOMER_DB_ADDR,options=channel_options)
 cust_stub = ecommerce_pb2_grpc.CustomerServiceStub(cust_channel)
-#prod_channel = grpc.insecure_channel('localhost:50052')
-prod_channel = grpc.insecure_channel('10.128.0.9:50052',options=channel_options)
+prod_channel = grpc.insecure_channel(PRODUCT_DB_ADDR,options=channel_options)
 prod_stub = ecommerce_pb2_grpc.ProductServiceStub(prod_channel)
 
 
@@ -178,7 +186,7 @@ def make_purchase():
     if not valid.success: return jsonify({"status": "FAIL", "message": "Login First"})
     
     try:
-        soap_client = SoapClient('http://localhost:8003/?wsdl')
+        soap_client = SoapClient('http://localhost:9003/?wsdl')
         result = soap_client.service.process_payment(data['name'], data['cc_number'], data['exp_date'], data['sec_code'])
         
         if result == "SUCCESS":
@@ -203,5 +211,9 @@ def make_purchase():
         return jsonify({"status": "FAIL", "message": f"SOAP Service Error: {str(e)}"})
 
 if __name__ == '__main__':
-    print("Buyer Server (REST) running on 5003...")
-    app.run(host='0.0.0.0', port=5003, debug=False, threaded=True)
+    print("Buyer Server (REST) running on 7003...")
+    app.run(
+        host=BUYER_SERVER_HOST,
+        port=BUYER_SERVER_PORT,
+        threaded=True
+    )

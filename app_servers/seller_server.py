@@ -2,19 +2,26 @@ from flask import Flask, request, jsonify
 import grpc
 import ecommerce_pb2
 import ecommerce_pb2_grpc
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = Flask(__name__)
+
+SELLER_SERVER_HOST = os.getenv("SELLER_SERVER_HOST", "0.0.0.0")
+SELLER_SERVER_PORT = int(os.getenv("SELLER_SERVER_PORT", 7001))
+CUSTOMER_DB_ADDR = f"{os.getenv('CUSTOMER_DB_HOST')}:{os.getenv('CUSTOMER_DB_PORT')}"
+PRODUCT_DB_ADDR  = f"{os.getenv('PRODUCT_DB_HOST')}:{os.getenv('PRODUCT_DB_PORT')}"
 
 channel_options = [
     ('grpc.max_concurrent_streams', 200),
     ('grpc.keepalive_time_ms', 10000),
     ('grpc.keepalive_timeout_ms', 5000),
 ]
-#cust_channel = grpc.insecure_channel('localhost:50051')
-cust_channel = grpc.insecure_channel('10.128.0.8:50051',options=channel_options)
+cust_channel = grpc.insecure_channel(CUSTOMER_DB_ADDR,options=channel_options)
 cust_stub = ecommerce_pb2_grpc.CustomerServiceStub(cust_channel)
-#prod_channel = grpc.insecure_channel('localhost:50052')
-prod_channel = grpc.insecure_channel('10.128.0.9:50052',options=channel_options)
+prod_channel = grpc.insecure_channel(PRODUCT_DB_ADDR,options=channel_options)
 prod_stub = ecommerce_pb2_grpc.ProductServiceStub(prod_channel)
 
 def is_valid_price(p):
@@ -108,5 +115,9 @@ def get_rating():
     return jsonify({"up": resp.up, "down": resp.down})
 
 if __name__ == '__main__':
-    print("Seller Server (REST) running on 5001...")
-    app.run(host='0.0.0.0', port=5001, debug=False, threaded=True)
+    print("Seller Server (REST) running on 7001...")
+    app.run(
+        host=SELLER_SERVER_HOST,
+        port=SELLER_SERVER_PORT,
+        threaded=True
+    )

@@ -19,3 +19,8 @@ env/
 # IDE settings (VS Code, PyCharm)
 .vscode/
 .idea/
+
+venv_ai_marketplace/
+
+*.db-shm
+*.db-wal

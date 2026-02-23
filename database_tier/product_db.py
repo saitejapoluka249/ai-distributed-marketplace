@@ -7,6 +7,13 @@ import threading
 import ecommerce_pb2
 import ecommerce_pb2_grpc
 
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+PRODUCT_DB_PORT = os.getenv("PRODUCT_DB_PORT", "60052")
+
 DB_NAME = "products.db"
 db_lock = threading.Lock()
 
@@ -116,8 +123,8 @@ def serve():
         ]
     )
     ecommerce_pb2_grpc.add_ProductServiceServicer_to_server(ProductService(), server)
-    server.add_insecure_port('[::]:50052')
-    print("Product DB (gRPC) running on 50052...")
+    server.add_insecure_port(f"[::]:{PRODUCT_DB_PORT}")
+    print("Product DB (gRPC) running on 60052...")
     server.start()
     server.wait_for_termination()
 

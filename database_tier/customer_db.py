@@ -7,6 +7,12 @@ import threading
 
 import ecommerce_pb2
 import ecommerce_pb2_grpc
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+CUSTOMER_DB_PORT = os.getenv("CUSTOMER_DB_PORT", "60051")
 
 DB_NAME = "customers.db"
 db_lock = threading.Lock()
@@ -204,8 +210,8 @@ def serve():
         ]
     )
     ecommerce_pb2_grpc.add_CustomerServiceServicer_to_server(CustomerService(), server)
-    server.add_insecure_port('[::]:50051')
-    print("Customer DB (gRPC) running on 50051...")
+    server.add_insecure_port(f"[::]:{CUSTOMER_DB_PORT}")
+    print("Customer DB (gRPC) running on 60051...")
     server.start()
     server.wait_for_termination()
 
