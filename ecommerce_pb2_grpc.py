@@ -5,7 +5,7 @@ import warnings
 
 import ecommerce_pb2 as ecommerce__pb2
 
-GRPC_GENERATED_VERSION = '1.78.0'
+GRPC_GENERATED_VERSION = '1.78.1'
 GRPC_VERSION = grpc.__version__
 _version_not_supported = False
 
@@ -99,6 +99,41 @@ class CustomerServiceStub(object):
                 request_serializer=ecommerce__pb2.PurchaseRequest.SerializeToString,
                 response_deserializer=ecommerce__pb2.Empty.FromString,
                 _registered_method=True)
+        self.PlaceOrder = channel.unary_unary(
+                '/ecommerce.CustomerService/PlaceOrder',
+                request_serializer=ecommerce__pb2.PlaceOrderRequest.SerializeToString,
+                response_deserializer=ecommerce__pb2.ResponseMsg.FromString,
+                _registered_method=True)
+        self.GetBuyerOrders = channel.unary_unary(
+                '/ecommerce.CustomerService/GetBuyerOrders',
+                request_serializer=ecommerce__pb2.UserRequest.SerializeToString,
+                response_deserializer=ecommerce__pb2.OrderResponse.FromString,
+                _registered_method=True)
+        self.GetSellerOrders = channel.unary_unary(
+                '/ecommerce.CustomerService/GetSellerOrders',
+                request_serializer=ecommerce__pb2.UserRequest.SerializeToString,
+                response_deserializer=ecommerce__pb2.OrderResponse.FromString,
+                _registered_method=True)
+        self.UpdateOrderStatus = channel.unary_unary(
+                '/ecommerce.CustomerService/UpdateOrderStatus',
+                request_serializer=ecommerce__pb2.OrderStatusRequest.SerializeToString,
+                response_deserializer=ecommerce__pb2.ResponseMsg.FromString,
+                _registered_method=True)
+        self.GetWishlist = channel.unary_unary(
+                '/ecommerce.CustomerService/GetWishlist',
+                request_serializer=ecommerce__pb2.SessionRequest.SerializeToString,
+                response_deserializer=ecommerce__pb2.WishlistResponse.FromString,
+                _registered_method=True)
+        self.AddToWishlist = channel.unary_unary(
+                '/ecommerce.CustomerService/AddToWishlist',
+                request_serializer=ecommerce__pb2.WishlistItemRequest.SerializeToString,
+                response_deserializer=ecommerce__pb2.ResponseMsg.FromString,
+                _registered_method=True)
+        self.RemoveFromWishlist = channel.unary_unary(
+                '/ecommerce.CustomerService/RemoveFromWishlist',
+                request_serializer=ecommerce__pb2.WishlistItemRequest.SerializeToString,
+                response_deserializer=ecommerce__pb2.ResponseMsg.FromString,
+                _registered_method=True)
 
 
 class CustomerServiceServicer(object):
@@ -141,7 +176,8 @@ class CustomerServiceServicer(object):
         raise NotImplementedError('Method not implemented!')
 
     def UpdateFeedback(self, request, context):
-        """Missing associated documentation comment in .proto file."""
+        """Legacy, kept for customer_db
+        """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
@@ -177,6 +213,48 @@ class CustomerServiceServicer(object):
         raise NotImplementedError('Method not implemented!')
 
     def AddPurchasedItems(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def PlaceOrder(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetBuyerOrders(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetSellerOrders(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def UpdateOrderStatus(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetWishlist(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def AddToWishlist(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def RemoveFromWishlist(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -249,6 +327,41 @@ def add_CustomerServiceServicer_to_server(servicer, server):
                     servicer.AddPurchasedItems,
                     request_deserializer=ecommerce__pb2.PurchaseRequest.FromString,
                     response_serializer=ecommerce__pb2.Empty.SerializeToString,
+            ),
+            'PlaceOrder': grpc.unary_unary_rpc_method_handler(
+                    servicer.PlaceOrder,
+                    request_deserializer=ecommerce__pb2.PlaceOrderRequest.FromString,
+                    response_serializer=ecommerce__pb2.ResponseMsg.SerializeToString,
+            ),
+            'GetBuyerOrders': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetBuyerOrders,
+                    request_deserializer=ecommerce__pb2.UserRequest.FromString,
+                    response_serializer=ecommerce__pb2.OrderResponse.SerializeToString,
+            ),
+            'GetSellerOrders': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetSellerOrders,
+                    request_deserializer=ecommerce__pb2.UserRequest.FromString,
+                    response_serializer=ecommerce__pb2.OrderResponse.SerializeToString,
+            ),
+            'UpdateOrderStatus': grpc.unary_unary_rpc_method_handler(
+                    servicer.UpdateOrderStatus,
+                    request_deserializer=ecommerce__pb2.OrderStatusRequest.FromString,
+                    response_serializer=ecommerce__pb2.ResponseMsg.SerializeToString,
+            ),
+            'GetWishlist': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetWishlist,
+                    request_deserializer=ecommerce__pb2.SessionRequest.FromString,
+                    response_serializer=ecommerce__pb2.WishlistResponse.SerializeToString,
+            ),
+            'AddToWishlist': grpc.unary_unary_rpc_method_handler(
+                    servicer.AddToWishlist,
+                    request_deserializer=ecommerce__pb2.WishlistItemRequest.FromString,
+                    response_serializer=ecommerce__pb2.ResponseMsg.SerializeToString,
+            ),
+            'RemoveFromWishlist': grpc.unary_unary_rpc_method_handler(
+                    servicer.RemoveFromWishlist,
+                    request_deserializer=ecommerce__pb2.WishlistItemRequest.FromString,
+                    response_serializer=ecommerce__pb2.ResponseMsg.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -612,6 +725,195 @@ class CustomerService(object):
             metadata,
             _registered_method=True)
 
+    @staticmethod
+    def PlaceOrder(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/ecommerce.CustomerService/PlaceOrder',
+            ecommerce__pb2.PlaceOrderRequest.SerializeToString,
+            ecommerce__pb2.ResponseMsg.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetBuyerOrders(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/ecommerce.CustomerService/GetBuyerOrders',
+            ecommerce__pb2.UserRequest.SerializeToString,
+            ecommerce__pb2.OrderResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetSellerOrders(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/ecommerce.CustomerService/GetSellerOrders',
+            ecommerce__pb2.UserRequest.SerializeToString,
+            ecommerce__pb2.OrderResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def UpdateOrderStatus(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/ecommerce.CustomerService/UpdateOrderStatus',
+            ecommerce__pb2.OrderStatusRequest.SerializeToString,
+            ecommerce__pb2.ResponseMsg.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetWishlist(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/ecommerce.CustomerService/GetWishlist',
+            ecommerce__pb2.SessionRequest.SerializeToString,
+            ecommerce__pb2.WishlistResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def AddToWishlist(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/ecommerce.CustomerService/AddToWishlist',
+            ecommerce__pb2.WishlistItemRequest.SerializeToString,
+            ecommerce__pb2.ResponseMsg.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def RemoveFromWishlist(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/ecommerce.CustomerService/RemoveFromWishlist',
+            ecommerce__pb2.WishlistItemRequest.SerializeToString,
+            ecommerce__pb2.ResponseMsg.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
 
 class ProductServiceStub(object):
     """Missing associated documentation comment in .proto file."""
@@ -657,10 +959,25 @@ class ProductServiceStub(object):
                 request_serializer=ecommerce__pb2.FeedbackRequest.SerializeToString,
                 response_deserializer=ecommerce__pb2.Empty.FromString,
                 _registered_method=True)
+        self.UpdateSellerFeedback = channel.unary_unary(
+                '/ecommerce.ProductService/UpdateSellerFeedback',
+                request_serializer=ecommerce__pb2.FeedbackRequest.SerializeToString,
+                response_deserializer=ecommerce__pb2.Empty.FromString,
+                _registered_method=True)
         self.GetSellerStats = channel.unary_unary(
                 '/ecommerce.ProductService/GetSellerStats',
                 request_serializer=ecommerce__pb2.UserRequest.SerializeToString,
                 response_deserializer=ecommerce__pb2.RatingResponse.FromString,
+                _registered_method=True)
+        self.CreatePromo = channel.unary_unary(
+                '/ecommerce.ProductService/CreatePromo',
+                request_serializer=ecommerce__pb2.PromoRequest.SerializeToString,
+                response_deserializer=ecommerce__pb2.ResponseMsg.FromString,
+                _registered_method=True)
+        self.GetPromo = channel.unary_unary(
+                '/ecommerce.ProductService/GetPromo',
+                request_serializer=ecommerce__pb2.PromoGetRequest.SerializeToString,
+                response_deserializer=ecommerce__pb2.PromoResponse.FromString,
                 _registered_method=True)
 
 
@@ -704,12 +1021,31 @@ class ProductServiceServicer(object):
         raise NotImplementedError('Method not implemented!')
 
     def UpdateItemFeedback(self, request, context):
+        """NEW REVIEW ENDPOINTS
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def UpdateSellerFeedback(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def GetSellerStats(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def CreatePromo(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetPromo(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -753,10 +1089,25 @@ def add_ProductServiceServicer_to_server(servicer, server):
                     request_deserializer=ecommerce__pb2.FeedbackRequest.FromString,
                     response_serializer=ecommerce__pb2.Empty.SerializeToString,
             ),
+            'UpdateSellerFeedback': grpc.unary_unary_rpc_method_handler(
+                    servicer.UpdateSellerFeedback,
+                    request_deserializer=ecommerce__pb2.FeedbackRequest.FromString,
+                    response_serializer=ecommerce__pb2.Empty.SerializeToString,
+            ),
             'GetSellerStats': grpc.unary_unary_rpc_method_handler(
                     servicer.GetSellerStats,
                     request_deserializer=ecommerce__pb2.UserRequest.FromString,
                     response_serializer=ecommerce__pb2.RatingResponse.SerializeToString,
+            ),
+            'CreatePromo': grpc.unary_unary_rpc_method_handler(
+                    servicer.CreatePromo,
+                    request_deserializer=ecommerce__pb2.PromoRequest.FromString,
+                    response_serializer=ecommerce__pb2.ResponseMsg.SerializeToString,
+            ),
+            'GetPromo': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetPromo,
+                    request_deserializer=ecommerce__pb2.PromoGetRequest.FromString,
+                    response_serializer=ecommerce__pb2.PromoResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -959,6 +1310,33 @@ class ProductService(object):
             _registered_method=True)
 
     @staticmethod
+    def UpdateSellerFeedback(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/ecommerce.ProductService/UpdateSellerFeedback',
+            ecommerce__pb2.FeedbackRequest.SerializeToString,
+            ecommerce__pb2.Empty.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
     def GetSellerStats(request,
             target,
             options=(),
@@ -975,6 +1353,60 @@ class ProductService(object):
             '/ecommerce.ProductService/GetSellerStats',
             ecommerce__pb2.UserRequest.SerializeToString,
             ecommerce__pb2.RatingResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def CreatePromo(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/ecommerce.ProductService/CreatePromo',
+            ecommerce__pb2.PromoRequest.SerializeToString,
+            ecommerce__pb2.ResponseMsg.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetPromo(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/ecommerce.ProductService/GetPromo',
+            ecommerce__pb2.PromoGetRequest.SerializeToString,
+            ecommerce__pb2.PromoResponse.FromString,
             options,
             channel_credentials,
             insecure,

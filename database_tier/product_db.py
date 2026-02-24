@@ -29,6 +29,13 @@ def init_db():
         fb_up INTEGER DEFAULT 0, fb_down INTEGER DEFAULT 0)''')
     cursor.execute('''CREATE TABLE IF NOT EXISTS category_counters (
         category_id INTEGER PRIMARY KEY, count INTEGER DEFAULT 1)''')
+    cursor.execute('''CREATE TABLE IF NOT EXISTS item_reviews (
+        item_id TEXT, reviewer TEXT, stars INTEGER, review_text TEXT)''')
+    cursor.execute('''CREATE TABLE IF NOT EXISTS seller_reviews (
+        seller TEXT, reviewer TEXT, stars INTEGER, review_text TEXT)''')
+    cursor.execute('''CREATE TABLE IF NOT EXISTS promos (
+        code TEXT PRIMARY KEY, target_type TEXT, target_val TEXT, 
+        discount_pct REAL, seller TEXT)''')
     conn.commit()
     conn.close()
 
@@ -62,35 +69,65 @@ class ProductService(ecommerce_pb2_grpc.ProductServiceServicer):
     def GetItem(self, request, context):
         r = self._execute("SELECT * FROM items WHERE item_id = ?", (request.id,), fetch_one=True)
         if r:
-            return ecommerce_pb2.ItemResponse(success=True, item_id=r[0], name=r[1], price=r[5], quantity=r[6], seller=r[7], fb_up=r[8], fb_down=r[9], condition=r[4])
+            rev_rows = self._execute("SELECT reviewer, stars, review_text FROM item_reviews WHERE item_id = ?", (request.id,), fetch_all=True)
+            reviews_list = [ecommerce_pb2.Review(reviewer=rv[0], stars=rv[1], text=rv[2]) for rv in rev_rows]
+            avg = sum([rv[1] for rv in rev_rows]) / len(rev_rows) if rev_rows else 0.0
+
+            return ecommerce_pb2.ItemResponse(success=True, item_id=r[0], name=r[1], price=r[5], quantity=r[6], seller=r[7], fb_up=r[8], fb_down=r[9], condition=r[4], reviews=reviews_list, avg_rating=avg)
         return ecommerce_pb2.ItemResponse(success=False)
     
-    def GetSellerStats(self, request, context):
 
+    def CreatePromo(self, request, context):
+        if request.target_type == "ITEM":
+            row = self._execute("SELECT 1 FROM items WHERE item_id = ? AND seller = ?", (request.target_val, request.seller), fetch_one=True)
+            if not row: 
+                return ecommerce_pb2.ResponseMsg(success=False, message="You do not own this item.")
+        
+        try:
+            self._execute("INSERT INTO promos (code, target_type, target_val, discount_pct, seller) VALUES (?, ?, ?, ?, ?)",
+                          (request.code, request.target_type, request.target_val, request.discount_pct, request.seller), commit=True)
+            return ecommerce_pb2.ResponseMsg(success=True, message="Promo code created successfully!")
+        except sqlite3.IntegrityError:
+            return ecommerce_pb2.ResponseMsg(success=False, message="That promo code word is already taken.")
+
+    def GetPromo(self, request, context):
+        row = self._execute("SELECT target_type, target_val, discount_pct, seller FROM promos WHERE code = ?", (request.code,), fetch_one=True)
+        if row:
+            return ecommerce_pb2.PromoResponse(success=True, target_type=row[0], target_val=row[1], discount_pct=row[2], seller=row[3])
+        return ecommerce_pb2.PromoResponse(success=False, message="Invalid Promo Code")
+    
+    
+    def GetSellerStats(self, request, context):
         seller_username = request.query 
         exists = self._execute("SELECT 1 FROM items WHERE seller = ? LIMIT 1", (seller_username,), fetch_one=True)
-        if not exists:
-            return ecommerce_pb2.RatingResponse(
-            up=0, 
-            down=0, 
-            status="FAIL", 
-            message="Seller not found."
-        )
-        row = self._execute("SELECT SUM(fb_up), SUM(fb_down) FROM items WHERE seller = ?", (seller_username,), fetch_one=True)
-    
-        total_up = row[0] if row[0] is not None else 0
-        total_down = row[1] if row[1] is not None else 0
-    
-        return ecommerce_pb2.RatingResponse(up=total_up, down=total_down, status="SUCCESS", message="")
-
+        if not exists: return ecommerce_pb2.RatingResponse(status="FAIL", message="Seller not found.")
+        
+        rev_rows = self._execute("SELECT reviewer, stars, review_text FROM seller_reviews WHERE seller = ?", (seller_username,), fetch_all=True)
+        reviews_list = [ecommerce_pb2.Review(reviewer=rv[0], stars=rv[1], text=rv[2]) for rv in rev_rows]
+        avg = sum([rv[1] for rv in rev_rows]) / len(rev_rows) if rev_rows else 0.0
+        
+        return ecommerce_pb2.RatingResponse(avg_rating=avg, reviews=reviews_list, status="SUCCESS", message="")
     def SearchItems(self, request, context):
-        kws = request.keywords.split(",")
-        rows = self._execute("SELECT item_id, name, keywords, price, quantity FROM items WHERE category = ?", (request.category,), fetch_all=True)
-        results = []
-        for r in rows:
-            if any(k in r[1] or k in r[2] for k in kws):
-                results.append(f"ID: {r[0]} | {r[1]} | ${r[3]} | Available: {r[4]}")
-        return ecommerce_pb2.SearchResponse(item_lines=results)
+        kw = f"%{request.keywords}%"
+        
+        count_query = "SELECT COUNT(*) FROM items WHERE category = ? AND (name LIKE ? OR keywords LIKE ?) AND price >= ? AND price <= ?"
+        params = [request.category, kw, kw, request.min_price, request.max_price]
+        total_items = self._execute(count_query, tuple(params), fetch_one=True)[0]
+        
+        total_pages = (total_items + request.limit - 1) // request.limit if total_items > 0 else 1
+        offset = (request.page - 1) * request.limit
+        
+        query = "SELECT item_id, name, price, quantity FROM items WHERE category = ? AND (name LIKE ? OR keywords LIKE ?) AND price >= ? AND price <= ? LIMIT ? OFFSET ?"
+        params.extend([request.limit, offset])
+        rows = self._execute(query, tuple(params), fetch_all=True)
+        
+        results = [f"ID: {r[0]} | {r[1]} | ${r[2]} | Available: {r[3]}" for r in rows]
+        
+        return ecommerce_pb2.SearchResponse(
+            item_lines=results, 
+            total_pages=total_pages, 
+            current_page=request.page
+        )
 
     def GetSellerItems(self, request, context):
         rows = self._execute("SELECT item_id, name, price, quantity FROM items WHERE seller = ?", (request.query,), fetch_all=True)
@@ -109,8 +146,13 @@ class ProductService(ecommerce_pb2_grpc.ProductServiceServicer):
         return ecommerce_pb2.ResponseMsg(success=False, message="Insufficient Stock")
 
     def UpdateItemFeedback(self, request, context):
-        if request.type == "up": self._execute("UPDATE items SET fb_up = fb_up + 1 WHERE item_id = ?", (request.target_id,), commit=True)
-        else: self._execute("UPDATE items SET fb_down = fb_down + 1 WHERE item_id = ?", (request.target_id,), commit=True)
+        self._execute("INSERT INTO item_reviews (item_id, reviewer, stars, review_text) VALUES (?, ?, ?, ?)",
+                      (request.target_id, request.reviewer, request.stars, request.text), commit=True)
+        return ecommerce_pb2.Empty()
+    
+    def UpdateSellerFeedback(self, request, context):
+        self._execute("INSERT INTO seller_reviews (seller, reviewer, stars, review_text) VALUES (?, ?, ?, ?)",
+                      (request.target_id, request.reviewer, request.stars, request.text), commit=True)
         return ecommerce_pb2.Empty()
 
 def serve():

@@ -50,8 +50,10 @@ while True:
     print("5. Update Price")
     print("6. Remove Stock")
     print("7. My Rating")
-    print("8. Logout")
-    
+    print("8. View Item Reviews & Details")
+    print("9. Logout")
+    print("10. Manage Orders")
+    print("11. Create Promo Code")
     c = input("Choice: ")
     
     try:
@@ -110,12 +112,92 @@ while True:
             if not sess_id: print("[-] Login First!"); continue
             r = requests.get(f"{BASE_URL}/rating", params={"sess_id": sess_id})
             d = handle_response(r)
-            if d: print(f"Rating: {d}")
+            if d:
+                if d.get('status') == "SUCCESS":
+                    print(f"\n--- MY RATING ---")
+                    print(f"Average Rating: {d.get('avg_rating')} / 5.0")
+                    print("\n--- REVIEWS ---")
+                    if not d.get('reviews'): 
+                        print("No reviews yet.")
+                    else:
+                        for rev in d['reviews']:
+                            print(f"[{rev['stars']} Stars] {rev['user']}: {rev['review']}")
+                else:
+                    print(f"[-] Error: {d.get('message')}")
+
 
         elif c == "8":
+            if not sess_id: 
+                print("[-] Login First!")
+                continue
+            iid = get_input("Item ID: ", str, regex=r"^\d+\.\d+$")
+            r = requests.get(f"{BASE_URL}/item", params={"item_id": iid})
+            d = handle_response(r)
+            if d and d.get('status') == 'SUCCESS': 
+                print(f"\n--- {d['name']} ---")
+                print(f"Price: ${d['price']} | In Stock: {d['quantity']}")
+                print(f"Average Item Rating: {d['rating']} / 5.0")
+                print("\n--- ITEM REVIEWS ---")
+                if not d['reviews']: 
+                    print("No reviews yet.")
+                for rev in d['reviews']:
+                    print(f"[{rev['stars']} Stars] {rev['user']}: {rev['review']}")
+            elif d:
+                print(f"[-] Error: {d.get('message')}")
+
+        elif c == "9":
             if sess_id: requests.post(f"{BASE_URL}/logout", json={"sess_id": sess_id}); sess_id = None
             print("[+] Logged Out")
             break
+
+        elif c == "10":
+            if not sess_id: print("[-] Login First!"); continue
+            r = requests.get(f"{BASE_URL}/orders", params={"sess_id": sess_id})
+            d = handle_response(r)
+            if d and d.get('status') == 'SUCCESS': 
+                print("\n--- PENDING CUSTOMER ORDERS ---")
+                if not d['orders']: 
+                    print("No orders yet.")
+                else:
+                    for o in d['orders']:
+                        print(f"[{o['status']}] Order ID: {o['order_id']}")
+                        print(f"    Item: {o['item']} (Qty: {o['qty']}) | Total: ${o['total']} | Buyer: {o['buyer']}\n")
+                    
+                    print("Update an order's status? (y/n)")
+                    ans = get_input("> ", str, regex=r"^[yYnN]$")
+                    if ans.lower() == 'y':
+                        oid = get_input("Order ID: ")
+                        new_stat = get_input("New Status (PROCESSING/SHIPPED/DELIVERED): ", str, regex=r"^(PROCESSING|SHIPPED|DELIVERED)$")
+                        r2 = requests.put(f"{BASE_URL}/orders", json={"sess_id": sess_id, "order_id": oid, "status": new_stat})
+                        d2 = handle_response(r2)
+                        
+                        if d2 and d2.get('status') == 'SUCCESS': 
+                            print(f"[+] {d2['message']}")
+
+        elif c == "11":
+            if not sess_id: print("[-] Login First!"); continue
+            
+            print("\nPromo Type:")
+            print("[1] Specific Item")
+            print("[2] Entire Category (e.g. all your Electronics)")
+            ptype = get_input("> ", str, regex=r"^[12]$")
+            
+            if ptype == "1":
+                t_type = "ITEM"
+                t_val = get_input("Item ID to discount: ", str, regex=r"^\d+\.\d+$")
+            else:
+                t_type = "CATEGORY"
+                t_val = str(get_input("Category ID (1=Electronics, 2=Books...): ", int))
+                
+            code = get_input("Enter a Promo Code word (e.g. HALFOFF): ")
+            pct = get_input("Discount Percentage (e.g. 20 for 20%): ", float)
+            
+            r = requests.post(f"{BASE_URL}/promo", json={
+                "sess_id": sess_id, "target_type": t_type, 
+                "target_val": t_val, "code": code, "discount": pct
+            })
+            d = handle_response(r)
+            if d and d.get('status') == 'SUCCESS': print(f"[+] {d['message']}")
 
     except KeyboardInterrupt:
         print("\n\n[!] Force Exit Detected (Ctrl+C).")

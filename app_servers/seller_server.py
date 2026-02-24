@@ -32,11 +32,23 @@ def is_valid_qty(q):
     try: return int(q) >= 0
     except: return False
 
+def is_strong_password(password):
+    if len(password) < 8: return False, "Password must be at least 8 characters."
+    if not any(c.isupper() for c in password): return False, "Password needs at least one uppercase letter."
+    if not any(c.islower() for c in password): return False, "Password needs at least one lowercase letter."
+    if not any(c.isdigit() for c in password): return False, "Password needs at least one number."
+    return True, ""
+
 @app.route('/create_account', methods=['POST'])
 def create_account():
     data = request.json
     if not data.get('username') or not data.get('password'):
         return jsonify({"status": "FAIL", "message": "Credentials cannot be empty"})
+        
+    is_valid, msg = is_strong_password(data['password'])
+    if not is_valid:
+        return jsonify({"status": "FAIL", "message": msg})
+
     resp = cust_stub.Register(ecommerce_pb2.RegisterRequest(username=data['username'], password=data['password'], role='SELLER'))
     if resp.success: return jsonify({"status": "SUCCESS", "uid": resp.user_id})
     return jsonify({"status": "FAIL", "message": resp.message})
@@ -104,15 +116,84 @@ def update_qty():
         return jsonify({"status": "SUCCESS", "message": "Stock Updated"})
     else:
         return jsonify({"status": "FAIL", "message": resp.message})
+    
 
+@app.route('/orders', methods=['GET', 'PUT'])
+def manage_orders():
+    sess_id = request.args.get('sess_id') or request.json.get('sess_id')
+    valid = cust_stub.ValidateSession(ecommerce_pb2.SessionRequest(sess_id=sess_id))
+    if not valid.success: return jsonify({"status": "FAIL", "message": "Login First"})
+    
+    if request.method == 'GET':
+        resp = cust_stub.GetSellerOrders(ecommerce_pb2.UserRequest(query=valid.username))
+        orders = [{"order_id": o.order_id, "buyer": o.buyer, "item": o.item_name, "qty": o.qty, "total": o.total_price, "status": o.status} for o in resp.orders]
+        return jsonify({"status": "SUCCESS", "orders": orders})
+        
+    if request.method == 'PUT':
+        data = request.json
+        if data.get('status') not in ['PROCESSING', 'SHIPPED', 'DELIVERED']:
+            return jsonify({"status": "FAIL", "message": "Invalid status."})
+            
+        resp = cust_stub.UpdateOrderStatus(ecommerce_pb2.OrderStatusRequest(order_id=data['order_id'], new_status=data['status']))
+        
+        if resp.success:
+            return jsonify({"status": "SUCCESS", "message": resp.message})
+        else:
+            return jsonify({"status": "FAIL", "message": resp.message})
+        
 @app.route('/rating', methods=['GET'])
 def get_rating():
     sess_id = request.args.get('sess_id')
     valid = cust_stub.ValidateSession(ecommerce_pb2.SessionRequest(sess_id=sess_id))
+    if not valid.success: 
+        return jsonify({"status": "FAIL", "message": "Login First"})
     
     resp = prod_stub.GetSellerStats(ecommerce_pb2.UserRequest(query=valid.username))
     
-    return jsonify({"up": resp.up, "down": resp.down})
+    reviews = [{"user": r.reviewer, "stars": r.stars, "review": r.text} for r in resp.reviews]
+    
+    return jsonify({
+        "status": resp.status, 
+        "avg_rating": round(resp.avg_rating, 1),
+        "reviews": reviews,
+        "message": resp.message
+    })
+
+@app.route('/promo', methods=['POST'])
+def create_promo():
+    data = request.json
+    sess_id = data.get('sess_id')
+    valid = cust_stub.ValidateSession(ecommerce_pb2.SessionRequest(sess_id=sess_id))
+    if not valid.success: return jsonify({"status": "FAIL", "message": "Login First"})
+
+    resp = prod_stub.CreatePromo(ecommerce_pb2.PromoRequest(
+        seller=valid.username, 
+        target_type=data['target_type'], 
+        target_val=str(data['target_val']), 
+        code=data['code'].upper(), 
+        discount_pct=float(data['discount'])
+    ))
+    return jsonify({"status": "SUCCESS" if resp.success else "FAIL", "message": resp.message})
+
+@app.route('/item', methods=['GET'])
+def get_item():
+    item_id = request.args.get('item_id')
+    if not item_id: 
+        return jsonify({"status": "FAIL", "message": "Invalid Item ID"})
+        
+    resp = prod_stub.GetItem(ecommerce_pb2.IDRequest(id=item_id))
+    if resp.success:
+        reviews = [{"user": r.reviewer, "stars": r.stars, "review": r.text} for r in resp.reviews]
+        return jsonify({
+            "status": "SUCCESS", 
+            "name": resp.name, 
+            "price": resp.price,
+            "rating": round(resp.avg_rating, 1),
+            "reviews": reviews,
+            "quantity": resp.quantity, 
+            "seller": resp.seller
+        })
+    return jsonify({"status": "FAIL", "message": "Item not found"})
 
 if __name__ == '__main__':
     print("Seller Server (REST) running on 7001...")

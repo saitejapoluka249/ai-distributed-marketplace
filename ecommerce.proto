@@ -9,7 +9,7 @@ service CustomerService {
     rpc ValidateSession (SessionRequest) returns (ValidateResponse);
     rpc Logout (SessionRequest) returns (Empty);
     rpc GetUserData (UserRequest) returns (UserResponse);
-    rpc UpdateFeedback (FeedbackRequest) returns (Empty);
+    rpc UpdateFeedback (FeedbackRequest) returns (Empty); 
     
     rpc GetCart (SessionRequest) returns (CartResponse);
     rpc AddToCart (CartItemRequest) returns (ResponseMsg);
@@ -17,6 +17,13 @@ service CustomerService {
     rpc ClearCart (SessionRequest) returns (Empty);
     rpc SaveCart (SessionRequest) returns (ResponseMsg);
     rpc AddPurchasedItems (PurchaseRequest) returns (Empty);
+    rpc PlaceOrder (PlaceOrderRequest) returns (ResponseMsg);
+    rpc GetBuyerOrders (UserRequest) returns (OrderResponse);
+    rpc GetSellerOrders (UserRequest) returns (OrderResponse);
+    rpc UpdateOrderStatus (OrderStatusRequest) returns (ResponseMsg);
+    rpc GetWishlist (SessionRequest) returns (WishlistResponse);
+    rpc AddToWishlist (WishlistItemRequest) returns (ResponseMsg);
+    rpc RemoveFromWishlist (WishlistItemRequest) returns (ResponseMsg);
 }
 
 service ProductService {
@@ -26,85 +33,79 @@ service ProductService {
     rpc GetSellerItems (UserRequest) returns (SearchResponse);
     rpc UpdatePrice (UpdatePriceRequest) returns (ResponseMsg);
     rpc UpdateQty (UpdateQtyRequest) returns (ResponseMsg);
+    
     rpc UpdateItemFeedback (FeedbackRequest) returns (Empty);
-
+    rpc UpdateSellerFeedback (FeedbackRequest) returns (Empty);
     rpc GetSellerStats (UserRequest) returns (RatingResponse);
+    rpc CreatePromo (PromoRequest) returns (ResponseMsg);
+    rpc GetPromo (PromoGetRequest) returns (PromoResponse);
 }
 
 message Empty {}
+
+message Review {
+    string reviewer = 1;
+    int32 stars = 2;
+    string text = 3;
+}
 
 message ResponseMsg {
     bool success = 1;
     string message = 2;
 }
 
-message RegisterRequest {
-    string username = 1;
-    string password = 2;
-    string role = 3;
+message Order {
+    string order_id = 1;
+    string buyer = 2;
+    string seller = 3;
+    string item_id = 4;
+    string item_name = 5;
+    int32 qty = 6;
+    double total_price = 7;
+    string status = 8;
 }
 
-message RegisterResponse {
+message OrderResponse {
     bool success = 1;
-    string message = 2;
-    int32 user_id = 3;
+    repeated Order orders = 2;
+    string message = 3;
 }
 
-message LoginRequest {
-    string username = 1;
-    string password = 2;
-    string role = 3; 
+message PlaceOrderRequest {
+    string buyer = 1;
+    repeated Order items = 2;
 }
 
-message LoginResponse {
-    bool success = 1;
-    string message = 2;
+message OrderStatusRequest {
+    string order_id = 1;
+    string new_status = 2;
 }
 
-message SessionRequest {
-    string sess_id = 1;
-    string username = 2; 
-}
-
-message ValidateResponse {
-    bool success = 1;
-    string username = 2;
-}
-
-message UserRequest {
-    string query = 1; 
-}
-
-message UserResponse {
-    bool success = 1;
-    int32 id = 2;
-    string role = 3;
-    int32 fb_up = 4;
-    int32 fb_down = 5;
-    string purchase_history_json = 6;
-}
+message RegisterRequest { string username = 1; string password = 2; string role = 3; }
+message RegisterResponse { bool success = 1; string message = 2; int32 user_id = 3; }
+message LoginRequest { string username = 1; string password = 2; string role = 3; }
+message LoginResponse { bool success = 1; string message = 2; }
+message SessionRequest { string sess_id = 1; string username = 2; }
+message ValidateResponse { bool success = 1; string username = 2; }
+message UserRequest { string query = 1; }
+message UserResponse { bool success = 1; int32 id = 2; string role = 3; int32 fb_up = 4; int32 fb_down = 5; string purchase_history_json = 6; }
 
 message RatingResponse {
-    int32 up = 1;
-    int32 down = 2;
-    string status = 3;   
+    double avg_rating = 1;          
+    repeated Review reviews = 2;  
+    string status = 3;
     string message = 4;  
 }
 
 message FeedbackRequest {
     string target_id = 1; 
-    string type = 2; 
+    string type = 2;    
+    int32 stars = 3;     
+    string text = 4;      
+    string reviewer = 5; 
 }
 
-message ItemRequest {
-    string name = 1;
-    int32 category = 2;
-    string keywords = 3;
-    string condition = 4;
-    double price = 5;
-    int32 quantity = 6;
-    string seller = 7;
-}
+message ItemRequest { string name = 1; int32 category = 2; string keywords = 3; string condition = 4; double price = 5; int32 quantity = 6; string seller = 7; }
 
 message ItemResponse {
     bool success = 1;
@@ -116,43 +117,56 @@ message ItemResponse {
     int32 fb_up = 7;
     int32 fb_down = 8;
     string condition = 9;
+    repeated Review reviews = 10;   // NEW
+    double avg_rating = 11;         // NEW
 }
 
-message IDRequest {
-    string id = 1;
-}
-
+message IDRequest { string id = 1; }
 message SearchRequest {
     int32 category = 1;
     string keywords = 2;
+    double min_price = 3;   // NEW
+    double max_price = 4;   // NEW
+    int32 page = 5;         // NEW
+    int32 limit = 6;        // NEW
 }
 
 message SearchResponse {
-    repeated string item_lines = 1; 
+    repeated string item_lines = 1;
+    int32 total_pages = 2;  // NEW
+    int32 current_page = 3; // NEW
+}
+message UpdatePriceRequest { string item_id = 1; double new_price = 2; }
+message UpdateQtyRequest { string item_id = 1; int32 qty_change = 2; }
+message CartItemRequest { string sess_id = 1; string item_id = 2; int32 qty = 3; }
+message CartResponse { bool success = 1; string cart_json = 2; }
+message PurchaseRequest { string username = 1; string items_json = 2; }
+message WishlistResponse {
+    bool success = 1;
+    string wishlist_json = 2;
 }
 
-message UpdatePriceRequest {
-    string item_id = 1;
-    double new_price = 2;
-}
-
-message UpdateQtyRequest {
-    string item_id = 1;
-    int32 qty_change = 2; 
-}
-
-message CartItemRequest {
+message WishlistItemRequest {
     string sess_id = 1;
     string item_id = 2;
-    int32 qty = 3;
+}
+message PromoRequest {
+    string seller = 1;
+    string target_type = 2; // "ITEM" or "CATEGORY"
+    string target_val = 3;  
+    string code = 4;
+    double discount_pct = 5;
 }
 
-message CartResponse {
+message PromoGetRequest {
+    string code = 1;
+}
+
+message PromoResponse {
     bool success = 1;
-    string cart_json = 2;
-}
-
-message PurchaseRequest {
-    string username = 1;
-    string items_json = 2;
+    string target_type = 2;
+    string target_val = 3;
+    double discount_pct = 4;
+    string seller = 5;      
+    string message = 6;
 }

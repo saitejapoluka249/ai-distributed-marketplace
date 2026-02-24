@@ -76,7 +76,10 @@ while True:
     print("11. Get Item Details")
     print("12. Leave Feedback (Item)")
     print("13. Get Seller Rating")
-    print("14. Purchase History")
+    print("14. My Orders")
+    print("15. Leave Feedback (Seller)")
+    print("16. Add to Wishlist")
+    print("17. My Wishlist")
     
     c = input("\nChoice: ")
     
@@ -100,15 +103,46 @@ while True:
 
         elif c == "3":
             if not sess_id: print("[-] Login First!"); continue
-            cat = get_input("Cat ID (1=Electronics, 2=Books...): ", int, "Category must be a number.")
-            kw = get_input("Keywords (comma separated): ")
-            r = requests.get(f"{BASE_URL}/search", params={"category": cat, "keywords": kw})
-            d = handle_response(r)
-            if d: 
-                print("\n--- SEARCH RESULTS ---")
-                items = d.get("items", [])
-                if not items: print("No items found.")
-                for line in items: print(line)
+            cat = get_input("Cat ID (1=Electronics, 2=Books...): ", int, "Must be a number.")
+            kw = get_input("Keywords: ")
+            
+            min_p_input = input("Min Price (Press Enter to skip): ").strip()
+            max_p_input = input("Max Price (Press Enter to skip): ").strip()
+            
+            min_p = float(min_p_input) if min_p_input else 0.0
+            max_p = float(max_p_input) if max_p_input else 9999999.0
+            
+            current_page = 1
+            
+            while True:
+                r = requests.get(f"{BASE_URL}/search", params={
+                    "category": cat, "keywords": kw, 
+                    "min_price": min_p, "max_price": max_p, 
+                    "page": current_page
+                })
+                d = handle_response(r)
+                
+                if d and d.get('status') == 'SUCCESS':
+                    print(f"\n--- SEARCH RESULTS (Page {d['current_page']} of {d['total_pages']}) ---")
+                    items = d.get("items", [])
+                    if not items: 
+                        print("No items found.")
+                        break
+                        
+                    for line in items: 
+                        print(line)
+                    
+                    if current_page < d['total_pages']:
+                        ans = input("\nPress 'N' for Next Page, or 'Q' to quit search: ").strip().lower()
+                        if ans == 'n':
+                            current_page += 1
+                        else:
+                            break
+                    else:
+                        print("\n[End of Results]")
+                        break
+                else:
+                    break
 
         elif c == "4":
             if not sess_id: print("[-] Login First!"); continue
@@ -134,15 +168,22 @@ while True:
 
         elif c == "7":
             if not sess_id: print("[-] Login First!"); continue
+            
             r = requests.get(f"{BASE_URL}/cart", params={"sess_id": sess_id})
             d = handle_response(r)
-            if d: 
-                print("\n" + "="*50)
-                print(f"{'ID':<10} {'Name':<20} {'Price':<10} {'Qty':<5} {'Total':<10}")
-                print("-" * 50)
-                for item in d.get("cart", []):
-                    print(f"{item['id']:<10} {item['name']:<20} ${item['price']:<9} {item['qty']:<5} ${item['item_total']:<10}")
-                print("-" * 50)
+            if d and d.get('status') == 'SUCCESS': 
+                print("\n" + "="*60)
+                print(f"{'ID':<6} {'Name':<15} {'Price':<8} {'Qty':<4} {'Total':<10}")
+                print("-" * 60)
+                
+                cart_items = d.get("cart", [])
+                if not cart_items:
+                    print("Your Cart is Empty!")
+                else:
+                    for item in cart_items:
+                        print(f"{item['id']:<6} {item['name']:<15} ${item['price']:<7} {item['qty']:<4} ${item['item_total']:<10}")
+                
+                print("-" * 60)
                 print(f"GRAND TOTAL: ${d.get('grand_total', 0)}")
 
         elif c == "8":
@@ -151,28 +192,42 @@ while True:
             d = handle_response(r)
             if d and d['status'] == "SUCCESS": print("[+] Cart Saved")
 
+
         elif c == "9": 
             if not sess_id: print("[-] Login First!"); continue
+            
             r_check = requests.get(f"{BASE_URL}/cart", params={"sess_id": sess_id})
             if r_check.status_code == 200:
                 cart_data = r_check.json()
                 if not cart_data.get('cart', []): 
-                    print("[-] Error: Your Cart is Empty!")
-                    continue
-            print("\n--- ENTER PAYMENT DETAILS ---")
+                    print("[-] Error: Your Cart is Empty!"); continue
             
-            name = get_input("Name on Card: ", str, regex=r"^[a-zA-Z\s\-\']+$", error_msg="Name cannot contain numbers or symbols.")
+            print("\n--- SECURE CHECKOUT ---")
             
-            cc = get_input("Card Num (16 digits): ", str, regex=r"^\d{16}$", error_msg="Card must be 16 digits.")
+            promo = input("Enter Promo Code (or press Enter to skip): ").strip()
             
-            exp = get_input("Expiry (MM/YY): ", str, regex=r"^(0[1-9]|1[0-2])\/\d{2}$", error_msg="Format must be MM/YY (e.g. 12/26)")
+            r_preview = requests.get(f"{BASE_URL}/cart", params={"sess_id": sess_id, "promo": promo})
+            d_preview = handle_response(r_preview)
             
-            cvv = get_input("CVV (3 digits): ", str, regex=r"^\d{3}$", error_msg="CVV must be 3 digits.")
-            
-            data = {"sess_id": sess_id, "name": name, "cc_number": cc, "exp_date": exp, "sec_code": cvv}
-            r = requests.post(f"{BASE_URL}/purchase", json=data)
-            d = handle_response(r)
-            if d and d['status'] == "SUCCESS": print(f"[+] {d.get('message')}")
+            if d_preview and d_preview.get('status') == 'SUCCESS':
+                if d_preview.get('promo_msg'):
+                    print(f"[*] {d_preview['promo_msg']}")
+                
+                final_total = d_preview.get('grand_total', 0)
+                print(f"[*] AMOUNT DUE: ${final_total}")
+                print("-" * 30)
+                
+                print("--- ENTER PAYMENT DETAILS ---")
+                name = get_input("Name on Card: ", str, regex=r"^[a-zA-Z\s\-\']+$", error_msg="No numbers/symbols.")
+                cc = get_input("Card Num: ", str, regex=r"^\d{16}$", error_msg="Must be 16 digits.")
+                exp = get_input("Expiry (MM/YY): ", str, regex=r"^(0[1-9]|1[0-2])\/\d{2}$", error_msg="Format MM/YY")
+                cvv = get_input("CVV: ", str, regex=r"^\d{3}$", error_msg="Must be 3 digits.")
+                
+                data = {"sess_id": sess_id, "name": name, "cc_number": cc, "exp_date": exp, "sec_code": cvv, "promo": promo}
+                r = requests.post(f"{BASE_URL}/purchase", json=data)
+                d = handle_response(r)
+                if d and d.get('status') == "SUCCESS": 
+                    print(f"\n[+] {d.get('message')}")
 
         elif c == "10":
             if sess_id: requests.post(f"{BASE_URL}/logout", json={"sess_id": sess_id}); sess_id = None
@@ -184,33 +239,106 @@ while True:
             iid = get_input("Item ID: ", str, regex=r"^\d+\.\d+$")
             r = requests.get(f"{BASE_URL}/item", params={"item_id": iid})
             d = handle_response(r)
-            if d: print(f"DETAILS: {d}")
+            if d: 
+                print(f"\n--- {d['name']} ---")
+                print(f"Price: ${d['price']} | In Stock: {d['quantity']}")
+                print(f"Seller: {d['seller']}")
+                print(f"Average Rating: {d['rating']} / 5.0")
+                print("\n--- REVIEWS ---")
+                if not d['reviews']: print("No reviews yet.")
+                for rev in d['reviews']:
+                    print(f"[{rev['stars']} Stars] {rev['user']}: {rev['review']}")
 
         elif c == "12":
             if not sess_id: print("[-] Login First!"); continue
             iid = get_input("Item ID: ", str, regex=r"^\d+\.\d+$")
-            t = get_input("Type (up/down): ", str, regex=r"^(up|down)$", error_msg="Type must be 'up' or 'down'")
-            r = requests.post(f"{BASE_URL}/feedback/item", json={"item_id": iid, "type": t})
-            handle_response(r)
+            stars = get_input("Stars (1-5): ", int, "Must be a number", regex=r"^[1-5]$")
+            text = get_input("Write your review: ")
+            
+            r = requests.post(f"{BASE_URL}/feedback/item", json={"sess_id": sess_id, "item_id": iid, "stars": stars, "text": text})
+            d = handle_response(r)
+            if d and d['status'] == 'SUCCESS': print(f"[+] {d['message']}")
 
         elif c == "13":
             if not sess_id: print("[-] Login First!"); continue
             seller = get_input("Seller Username: ")
             r = requests.get(f"{BASE_URL}/rating/seller", params={"seller_id": seller})
             data = handle_response(r)
-            if data:
-                if data.get('status') == "SUCCESS":
-                    print(f"\n--- RATING FOR {seller} ---")
-                    print(f"Thumbs Up:   {data['up']}")
-                    print(f"Thumbs Down: {data['down']}")
-                else:
-                    print(f"[-] Error: {data.get('message', 'Seller not found')}")
+            if data and data.get('status') == "SUCCESS":
+                print(f"\n--- RATING FOR {seller} ---")
+                print(f"Average Rating: {data['avg_rating']} / 5.0")
+                print("\n--- SELLER REVIEWS ---")
+                if not data['reviews']: print("No reviews yet.")
+                for rev in data['reviews']:
+                    print(f"[{rev['stars']} Stars] {rev['user']}: {rev['review']}")
+            else:
+                print(f"[-] Error: {data.get('message', 'Seller not found')}")
 
         elif c == "14":
             if not sess_id: print("[-] Login First!"); continue
-            r = requests.get(f"{BASE_URL}/history", params={"sess_id": sess_id})
+            r = requests.get(f"{BASE_URL}/orders", params={"sess_id": sess_id})
             d = handle_response(r)
-            if d: print(d.get('history'))
+            if d and d.get('status') == 'SUCCESS': 
+                print("\n--- MY ORDERS ---")
+                if not d['orders']: print("No orders yet.")
+                for o in d['orders']:
+                    print(f"[{o['status']}] Order ID: {o['order_id']}")
+                    print(f"    Item: {o['item']} (Qty: {o['qty']}) | Total: ${o['total']} | Seller: {o['seller']}\n")
+
+        elif c == "15":
+            if not sess_id: 
+                print("[-] Login First!")
+                continue
+            seller = get_input("Seller Username: ")
+            stars = get_input("Stars (1-5): ", int, "Must be a number", regex=r"^[1-5]$")
+            text = get_input("Write your review: ")
+            
+            r = requests.post(f"{BASE_URL}/feedback/seller", json={
+                "sess_id": sess_id, 
+                "seller_id": seller, 
+                "stars": stars, 
+                "text": text
+            })
+            
+            d = handle_response(r)
+            if d and d.get('status') == 'SUCCESS': 
+                print(f"[+] {d['message']}")
+
+        elif c == "16":
+            if not sess_id: print("[-] Login First!"); continue
+            iid = get_input("Item ID: ", str, regex=r"^\d+\.\d+$")
+            r = requests.post(f"{BASE_URL}/wishlist", json={"sess_id": sess_id, "item_id": iid})
+            d = handle_response(r)
+            if d and d.get('status') == 'SUCCESS': print(f"[+] {d['message']}")
+
+        elif c == "17":
+            if not sess_id: print("[-] Login First!"); continue
+            r = requests.get(f"{BASE_URL}/wishlist", params={"sess_id": sess_id})
+            d = handle_response(r)
+            if d and d.get('status') == 'SUCCESS':
+                print("\n--- MY WISHLIST ---")
+                items = d.get('wishlist', [])
+                if not items:
+                    print("Your wishlist is empty.")
+                    continue
+                    
+                for item in items:
+                    print(f"ID: {item['id']} | {item['name']} | ${item['price']} | In Stock: {item['qty_available']}")
+                
+                print("\nOptions: [M]ove item to Cart, [R]emove item, [Q]uit to menu")
+                ans = get_input("> ", str, regex=r"^[mM|rR|qQ]$").lower()
+                
+                if ans == 'm':
+                    iid = get_input("Item ID to move: ", str, regex=r"^\d+\.\d+$")
+                    r2 = requests.post(f"{BASE_URL}/wishlist/move_to_cart", json={"sess_id": sess_id, "item_id": iid})
+                    d2 = handle_response(r2)
+                    if d2 and d2.get('status') == 'SUCCESS': print(f"[+] {d2['message']}")
+                
+                elif ans == 'r':
+                    iid = get_input("Item ID to remove: ", str, regex=r"^\d+\.\d+$")
+                    r2 = requests.delete(f"{BASE_URL}/wishlist", json={"sess_id": sess_id, "item_id": iid})
+                    d2 = handle_response(r2)
+                    if d2 and d2.get('status') == 'SUCCESS': print(f"[+] {d2['message']}")
 
     except KeyboardInterrupt:
         print("\n\n[!] Force Exit Detected (Ctrl+C).")

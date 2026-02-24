@@ -8,6 +8,7 @@ import threading
 import ecommerce_pb2
 import ecommerce_pb2_grpc
 import os
+import bcrypt
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -29,10 +30,14 @@ def init_db():
         username TEXT UNIQUE, password TEXT, role TEXT,
         feedback_up INTEGER DEFAULT 0, feedback_down INTEGER DEFAULT 0,
         saved_cart TEXT DEFAULT '[]', cart_version INTEGER DEFAULT 0,
-        purchase_history TEXT DEFAULT '[]')''')
+        purchase_history TEXT DEFAULT '[]',
+        wishlist TEXT DEFAULT '[]')''')
     cursor.execute('''CREATE TABLE IF NOT EXISTS sessions (
         sess_id TEXT PRIMARY KEY, username TEXT, last_active REAL,
         current_cart TEXT DEFAULT '[]', cart_version INTEGER DEFAULT 0)''')
+    cursor.execute('''CREATE TABLE IF NOT EXISTS orders (
+        order_id TEXT PRIMARY KEY, buyer TEXT, seller TEXT, item_id TEXT, 
+        item_name TEXT, qty INTEGER, total_price REAL, status TEXT, timestamp REAL)''')
     conn.commit()
     conn.close()
 
@@ -57,20 +62,31 @@ class CustomerService(ecommerce_pb2_grpc.CustomerServiceServicer):
 
     def Register(self, request, context):
         print(f"[REGISTER] {request.username}")
+        
+        salt = bcrypt.gensalt()
+        hashed_pw = bcrypt.hashpw(request.password.encode('utf-8'), salt).decode('utf-8')
+        
         uid = self._execute("INSERT INTO users (username, password, role) VALUES (?, ?, ?)", 
-                            (request.username, request.password, request.role), commit=True)
+                            (request.username, hashed_pw, request.role), commit=True)
         if uid:
             return ecommerce_pb2.RegisterResponse(success=True, message="Created", user_id=uid)
         return ecommerce_pb2.RegisterResponse(success=False, message="User exists")
 
     def Login(self, request, context):
         row = self._execute(
-        "SELECT id FROM users WHERE username = ? AND password = ? AND role = ?", 
-        (request.username, request.password, request.role), 
-        fetch_one=True
+            "SELECT id, password FROM users WHERE username = ? AND role = ?", 
+            (request.username, request.role), 
+            fetch_one=True
         )
+        
         if row:
-            return ecommerce_pb2.LoginResponse(success=True, message="Login Success")
+            stored_hash = row[1].encode('utf-8')
+            try:
+                if bcrypt.checkpw(request.password.encode('utf-8'), stored_hash):
+                    return ecommerce_pb2.LoginResponse(success=True, message="Login Success")
+            except ValueError:
+                pass
+                
         return ecommerce_pb2.LoginResponse(success=False, message="Invalid Credentials or Wrong Account Type")
 
     def SaveSession(self, request, context):
@@ -84,6 +100,36 @@ class CustomerService(ecommerce_pb2_grpc.CustomerServiceServicer):
         self._execute("INSERT OR REPLACE INTO sessions (sess_id, username, last_active, current_cart, cart_version) VALUES (?, ?, ?, ?, ?)",
                       (request.sess_id, request.username, time.time(), cart_json, cart_ver), commit=True)
         return ecommerce_pb2.Empty()
+    
+
+    def PlaceOrder(self, request, context):
+        import time
+        for item in request.items:
+            self._execute(
+                "INSERT INTO orders (order_id, buyer, seller, item_id, item_name, qty, total_price, status, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (item.order_id, item.buyer, item.seller, item.item_id, item.item_name, item.qty, item.total_price, item.status, time.time()), 
+                commit=True
+            )
+        return ecommerce_pb2.ResponseMsg(success=True, message="Order Placed")
+
+    def GetBuyerOrders(self, request, context):
+        rows = self._execute("SELECT order_id, seller, item_id, item_name, qty, total_price, status FROM orders WHERE buyer = ? ORDER BY timestamp DESC", (request.query,), fetch_all=True)
+        orders = [ecommerce_pb2.Order(order_id=r[0], seller=r[1], item_id=r[2], item_name=r[3], qty=r[4], total_price=r[5], status=r[6]) for r in rows]
+        return ecommerce_pb2.OrderResponse(success=True, orders=orders)
+
+    def GetSellerOrders(self, request, context):
+        rows = self._execute("SELECT order_id, buyer, item_id, item_name, qty, total_price, status FROM orders WHERE seller = ? ORDER BY timestamp DESC", (request.query,), fetch_all=True)
+        orders = [ecommerce_pb2.Order(order_id=r[0], buyer=r[1], item_id=r[2], item_name=r[3], qty=r[4], total_price=r[5], status=r[6]) for r in rows]
+        return ecommerce_pb2.OrderResponse(success=True, orders=orders)
+
+    def UpdateOrderStatus(self, request, context):
+        row = self._execute("SELECT 1 FROM orders WHERE order_id = ?", (request.order_id,), fetch_one=True)
+        if not row:
+            return ecommerce_pb2.ResponseMsg(success=False, message="Invalid Order ID. Order not found.")
+        
+        self._execute("UPDATE orders SET status = ? WHERE order_id = ?", (request.new_status, request.order_id), commit=True)
+        return ecommerce_pb2.ResponseMsg(success=True, message="Order status updated successfully!")
+    
 
     def ValidateSession(self, request, context):
         row = self._execute("SELECT username, last_active FROM sessions WHERE sess_id = ?", (request.sess_id,), fetch_one=True)
@@ -178,6 +224,42 @@ class CustomerService(ecommerce_pb2_grpc.CustomerServiceServicer):
             self._execute("UPDATE sessions SET cart_version = ? WHERE sess_id = ?", (new_ver, request.sess_id), commit=True)
             return ecommerce_pb2.ResponseMsg(success=True)
         return ecommerce_pb2.ResponseMsg(success=False)
+    
+
+    def GetWishlist(self, request, context):
+        row = self._execute("SELECT username FROM sessions WHERE sess_id = ?", (request.sess_id,), fetch_one=True)
+        if not row: return ecommerce_pb2.WishlistResponse(success=False)
+        
+        u_row = self._execute("SELECT wishlist FROM users WHERE username = ?", (row[0],), fetch_one=True)
+        return ecommerce_pb2.WishlistResponse(success=True, wishlist_json=u_row[0] if u_row else "[]")
+
+    def AddToWishlist(self, request, context):
+        row = self._execute("SELECT username FROM sessions WHERE sess_id = ?", (request.sess_id,), fetch_one=True)
+        if not row: return ecommerce_pb2.ResponseMsg(success=False, message="Invalid Session")
+        
+        u_row = self._execute("SELECT wishlist FROM users WHERE username = ?", (row[0],), fetch_one=True)
+        w_list = json.loads(u_row[0]) if u_row and u_row[0] else []
+        
+        if request.item_id not in w_list:
+            w_list.append(request.item_id)
+            self._execute("UPDATE users SET wishlist = ? WHERE username = ?", (json.dumps(w_list), row[0]), commit=True)
+            return ecommerce_pb2.ResponseMsg(success=True, message="Added to Wishlist!")
+            
+        return ecommerce_pb2.ResponseMsg(success=False, message="Item is already in your wishlist.")
+
+    def RemoveFromWishlist(self, request, context):
+        row = self._execute("SELECT username FROM sessions WHERE sess_id = ?", (request.sess_id,), fetch_one=True)
+        if not row: return ecommerce_pb2.ResponseMsg(success=False, message="Invalid Session")
+        
+        u_row = self._execute("SELECT wishlist FROM users WHERE username = ?", (row[0],), fetch_one=True)
+        w_list = json.loads(u_row[0]) if u_row and u_row[0] else []
+        
+        if request.item_id in w_list:
+            w_list.remove(request.item_id)
+            self._execute("UPDATE users SET wishlist = ? WHERE username = ?", (json.dumps(w_list), row[0]), commit=True)
+            return ecommerce_pb2.ResponseMsg(success=True, message="Removed from Wishlist.")
+            
+        return ecommerce_pb2.ResponseMsg(success=False, message="Item not found in wishlist.")
     
 
     def AddPurchasedItems(self, request, context):
