@@ -26,7 +26,8 @@ def init_db():
     cursor.execute('''CREATE TABLE IF NOT EXISTS items (
         item_id TEXT PRIMARY KEY, name TEXT, category INTEGER, keywords TEXT,
         condition TEXT, price REAL, quantity INTEGER, seller TEXT,
-        fb_up INTEGER DEFAULT 0, fb_down INTEGER DEFAULT 0)''')
+        fb_up INTEGER DEFAULT 0, fb_down INTEGER DEFAULT 0,
+        image_url TEXT DEFAULT '')''') # ADDED image_url HERE
     cursor.execute('''CREATE TABLE IF NOT EXISTS category_counters (
         category_id INTEGER PRIMARY KEY, count INTEGER DEFAULT 1)''')
     cursor.execute('''CREATE TABLE IF NOT EXISTS item_reviews (
@@ -61,10 +62,12 @@ class ProductService(ecommerce_pb2_grpc.ProductServiceServicer):
         if not row: self._execute("INSERT INTO category_counters (category_id, count) VALUES (?, ?)", (request.category, 1), commit=True)
         
         item_id = f"{request.category}.{count}"
-        self._execute("INSERT INTO items (item_id, name, category, keywords, condition, price, quantity, seller) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                      (item_id, request.name, request.category, request.keywords, request.condition, request.price, request.quantity, request.seller), commit=True)
+        # ADDED image_url to INSERT
+        self._execute("INSERT INTO items (item_id, name, category, keywords, condition, price, quantity, seller, image_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                      (item_id, request.name, request.category, request.keywords, request.condition, request.price, request.quantity, request.seller, request.image_url), commit=True)
         self._execute("UPDATE category_counters SET count = count + 1 WHERE category_id = ?", (request.category,), commit=True)
         return ecommerce_pb2.ItemResponse(success=True, item_id=item_id)
+    
 
     def GetItem(self, request, context):
         r = self._execute("SELECT * FROM items WHERE item_id = ?", (request.id,), fetch_one=True)
@@ -73,8 +76,21 @@ class ProductService(ecommerce_pb2_grpc.ProductServiceServicer):
             reviews_list = [ecommerce_pb2.Review(reviewer=rv[0], stars=rv[1], text=rv[2]) for rv in rev_rows]
             avg = sum([rv[1] for rv in rev_rows]) / len(rev_rows) if rev_rows else 0.0
 
-            return ecommerce_pb2.ItemResponse(success=True, item_id=r[0], name=r[1], price=r[5], quantity=r[6], seller=r[7], fb_up=r[8], fb_down=r[9], condition=r[4], reviews=reviews_list, avg_rating=avg)
+            # r[10] is the new image_url column!
+            return ecommerce_pb2.ItemResponse(success=True, item_id=r[0], name=r[1], price=r[5], quantity=r[6], seller=r[7], fb_up=r[8], fb_down=r[9], condition=r[4], reviews=reviews_list, avg_rating=avg, image_url=r[10])
         return ecommerce_pb2.ItemResponse(success=False)
+    
+    def GetSellerPromos(self, request, context):
+        # Fetch all promos for this specific seller
+        rows = self._execute("SELECT code, target_type, target_val, discount_pct FROM promos WHERE seller = ?", (request.query,), fetch_all=True)
+        
+        promos_list = []
+        for r in rows:
+            promos_list.append(ecommerce_pb2.PromoResponse(
+                success=True, code=r[0], target_type=r[1], target_val=r[2], discount_pct=r[3], seller=request.query
+            ))
+            
+        return ecommerce_pb2.PromoListResponse(success=True, promos=promos_list)
     
 
     def CreatePromo(self, request, context):
@@ -100,13 +116,45 @@ class ProductService(ecommerce_pb2_grpc.ProductServiceServicer):
     def GetSellerStats(self, request, context):
         seller_username = request.query 
         exists = self._execute("SELECT 1 FROM items WHERE seller = ? LIMIT 1", (seller_username,), fetch_one=True)
-        if not exists: return ecommerce_pb2.RatingResponse(status="FAIL", message="Seller not found.")
+        if not exists: 
+            return ecommerce_pb2.RatingResponse(status="FAIL", message="Seller not found.")
         
-        rev_rows = self._execute("SELECT reviewer, stars, review_text FROM seller_reviews WHERE seller = ?", (seller_username,), fetch_all=True)
-        reviews_list = [ecommerce_pb2.Review(reviewer=rv[0], stars=rv[1], text=rv[2]) for rv in rev_rows]
-        avg = sum([rv[1] for rv in rev_rows]) / len(rev_rows) if rev_rows else 0.0
-        
-        return ecommerce_pb2.RatingResponse(avg_rating=avg, reviews=reviews_list, status="SUCCESS", message="")
+        # 1. Fetch Seller Reviews
+        seller_revs = self._execute("SELECT reviewer, stars, review_text FROM seller_reviews WHERE seller = ?", (seller_username,), fetch_all=True)
+        seller_list = []
+        seller_stars = 0
+        if seller_revs:
+            for rv in seller_revs:
+                seller_list.append(ecommerce_pb2.Review(reviewer=rv[0], stars=rv[1], text=rv[2]))
+                seller_stars += rv[1]
+        seller_avg = (seller_stars / len(seller_revs)) if seller_revs else 0.0
+
+        # 2. Fetch Item Reviews
+        item_revs = self._execute("""
+            SELECT r.reviewer, r.stars, r.review_text, i.name 
+            FROM item_reviews r 
+            JOIN items i ON r.item_id = i.item_id 
+            WHERE i.seller = ?
+        """, (seller_username,), fetch_all=True)
+        item_list = []
+        item_stars = 0
+        if item_revs:
+            for rv in item_revs:
+                formatted_text = f"[Item: {rv[3]}] {rv[2]}" 
+                item_list.append(ecommerce_pb2.Review(reviewer=rv[0], stars=rv[1], text=formatted_text))
+                item_stars += rv[1]
+        item_avg = (item_stars / len(item_revs)) if item_revs else 0.0
+
+        # 3. Return them separately!
+        return ecommerce_pb2.RatingResponse(
+            avg_rating=seller_avg, 
+            reviews=seller_list,
+            item_avg_rating=item_avg, 
+            item_reviews=item_list,
+            status="SUCCESS", 
+            message=""
+        )
+    
     def SearchItems(self, request, context):
         kw = f"%{request.keywords}%"
         
@@ -117,21 +165,21 @@ class ProductService(ecommerce_pb2_grpc.ProductServiceServicer):
         total_pages = (total_items + request.limit - 1) // request.limit if total_items > 0 else 1
         offset = (request.page - 1) * request.limit
         
-        query = "SELECT item_id, name, price, quantity FROM items WHERE category = ? AND (name LIKE ? OR keywords LIKE ?) AND price >= ? AND price <= ? LIMIT ? OFFSET ?"
+        query = "SELECT item_id, name, price, quantity, image_url FROM items WHERE category = ? AND (name LIKE ? OR keywords LIKE ?) AND price >= ? AND price <= ? LIMIT ? OFFSET ?"
         params.extend([request.limit, offset])
         rows = self._execute(query, tuple(params), fetch_all=True)
         
-        results = [f"ID: {r[0]} | {r[1]} | ${r[2]} | Available: {r[3]}" for r in rows]
+        # We append | IMG:url to the end of the string
+        results = [f"ID: {r[0]} | {r[1]} | ${r[2]} | Available: {r[3]} | IMG: {r[4]}" for r in rows]
         
         return ecommerce_pb2.SearchResponse(
-            item_lines=results, 
-            total_pages=total_pages, 
-            current_page=request.page
+            item_lines=results, total_pages=total_pages, current_page=request.page
         )
 
     def GetSellerItems(self, request, context):
-        rows = self._execute("SELECT item_id, name, price, quantity FROM items WHERE seller = ?", (request.query,), fetch_all=True)
-        results = [f"ID:{r[0]} | {r[1]} (${r[2]}) Qty:{r[3]}" for r in rows]
+        # Fetch image_url here too
+        rows = self._execute("SELECT item_id, name, price, quantity, image_url FROM items WHERE seller = ?", (request.query,), fetch_all=True)
+        results = [f"ID:{r[0]} | {r[1]} (${r[2]}) Qty:{r[3]} | IMG:{r[4]}" for r in rows]
         return ecommerce_pb2.SearchResponse(item_lines=results)
 
     def UpdatePrice(self, request, context):

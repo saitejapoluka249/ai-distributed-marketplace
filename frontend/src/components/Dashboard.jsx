@@ -9,7 +9,7 @@ export default function Dashboard({ sessionId }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [selectedItemId, setSelectedItemId] = useState(null);
-const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   const [category, setCategory] = useState('1'); 
   const [keywords, setKeywords] = useState('');
@@ -30,13 +30,21 @@ const [isModalOpen, setIsModalOpen] = useState(false);
 
       if (data.status === 'SUCCESS') {
         const parsedItems = data.items.map(itemStr => {
-          const parts = itemStr.split(' | ');
-          return {
-            id: parts[0].replace('ID:', '').trim(),
-            name: parts[1].trim(),
-            price: parts[2].trim(),
-            available: parts[3].replace('Available:', '').trim()
-          };
+          // NEW REGEX: Slices out the ID, Name, Price, Qty, and the new IMG string!
+          const match = itemStr.match(/ID:\s*([\d\.]+)\s*\|\s*(.*?)\s*\|\s*\$([\d\.]+)\s*\|\s*Available:\s*(\d+)(?:\s*\|\s*IMG:\s*(.*))?/i);
+          
+          if (match) {
+            return {
+              id: match[1],
+              name: match[2].trim(),
+              price: match[3],
+              available: match[4],
+              // Automatically grabs the base64 image string if it exists!
+              image: match[5] && match[5].trim() !== "None" ? match[5].trim() : null,
+              category: match[1].split('.')[0]
+            };
+          }
+          return { id: 'N/A', name: 'Unknown', price: '0', available: '0', image: null, category: '0' };
         });
         setItems(parsedItems);
         setTotalPages(data.total_pages);
@@ -176,46 +184,62 @@ const [isModalOpen, setIsModalOpen] = useState(false);
                   whileHover={{ y: -5, boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)" }}
                   className="bg-white rounded-2xl border border-gray-100 overflow-hidden flex flex-col transition-all duration-300"
                 >
-                  <div className="h-32 bg-gradient-to-tr from-indigo-100 to-purple-50 relative overflow-hidden flex items-center justify-center">
-                    <svg className="w-12 h-12 text-indigo-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                    </svg>
-                    <div className="absolute top-2 right-2 bg-white/80 backdrop-blur-sm px-2 py-1 rounded-md text-xs font-bold text-indigo-700">
+                  
+                  {/* Image Render Block */}
+                  <div className="h-48 bg-gray-100 flex items-center justify-center relative overflow-hidden group-hover:opacity-90 transition-opacity">
+                    {item.image ? (
+                      <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <svg className="w-12 h-12 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                    )}
+
+                    {/* Stock Badges */}
+                    <div className="absolute top-3 left-3 flex flex-col gap-2">
+                      <span className="bg-white/90 backdrop-blur text-gray-800 text-xs font-bold px-3 py-1.5 rounded-full shadow-sm">
+                        Cat {item.category}
+                      </span>
+                    </div>
+                    <div className="absolute top-3 right-3 bg-white/80 backdrop-blur-sm px-2 py-1 rounded-md text-xs font-bold text-indigo-700">
                       ID: {item.id}
                     </div>
+                    {Number(item.available) < 5 && Number(item.available) > 0 && (
+                      <div className="absolute bottom-3 left-3 bg-red-500 text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-sm flex items-center gap-1 animate-pulse">
+                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd"></path></svg>
+                        Only {item.available} left
+                      </div>
+                    )}
                   </div>
 
                   <div className="p-5 flex-1 flex flex-col">
                     <h3 className="text-lg font-bold text-gray-900 mb-1 line-clamp-1">{item.name}</h3>
                     <p className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600 mb-4">
-                      {item.price}
+                      ${item.price}
                     </p>
-                    </div>
                     
                     <div className="mt-auto">
-                   <div className="flex justify-between items-center text-sm text-gray-500 mb-4">
-                     <span className="flex items-center gap-1">
-                       <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
-                       {item.available} in stock
-                     </span>
-                   </div>
+                      <div className="flex justify-between items-center text-sm text-gray-500 mb-4">
+                        <span className="flex items-center gap-1">
+                          <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
+                          {item.available} in stock
+                        </span>
+                      </div>
 
-                   {/* NEW: Two buttons side by side */}
-                   <div className="flex gap-2">
-                     <button 
-                       onClick={() => openItemDetails(item.id)}
-                       className="flex-1 bg-white border-2 border-indigo-100 hover:border-indigo-600 hover:text-indigo-600 text-gray-700 font-bold py-2.5 rounded-xl transition-colors duration-200 text-sm"
-                     >
-                       View Details
-                     </button>
-                     <button 
-                       onClick={() => handleAddToCart(item.id)}
-                       className="flex-1 bg-indigo-50 hover:bg-indigo-600 hover:text-white text-indigo-700 font-bold py-2.5 rounded-xl transition-colors duration-200 text-sm"
-                     >
-                       Add to Cart
-                     </button>
-                   </div>
-                 </div>
+                      <div className="flex gap-2">
+                        <button 
+                          onClick={() => openItemDetails(item.id)}
+                          className="flex-1 bg-white border-2 border-indigo-100 hover:border-indigo-600 hover:text-indigo-600 text-gray-700 font-bold py-2.5 rounded-xl transition-colors duration-200 text-sm"
+                        >
+                          View Details
+                        </button>
+                        <button 
+                          onClick={() => handleAddToCart(item.id)}
+                          className="flex-1 bg-indigo-50 hover:bg-indigo-600 hover:text-white text-indigo-700 font-bold py-2.5 rounded-xl transition-colors duration-200 text-sm"
+                        >
+                          Add to Cart
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 </motion.div>
               ))}
             </motion.div>
@@ -244,13 +268,13 @@ const [isModalOpen, setIsModalOpen] = useState(false);
           </>
         )}
       </div>
-      {/* Item Details Modal rendered securely outside the grid */}
-   <ItemModal 
-     isOpen={isModalOpen} 
-     onClose={() => setIsModalOpen(false)} 
-     itemId={selectedItemId} 
-     sessionId={sessionId} 
-   />
+
+      <ItemModal 
+        isOpen={isModalOpen} 
+        onClose={() => setIsModalOpen(false)} 
+        itemId={selectedItemId} 
+        sessionId={sessionId} 
+      />
     </div>
   );
 }

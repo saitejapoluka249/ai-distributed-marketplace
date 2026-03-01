@@ -10,7 +10,17 @@ export default function SellerInventory({ sessionId }) {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   
   // New Item Form State
-  const [newItem, setNewItem] = useState({ name: '', category: '1', keywords: '', condition: 'New', price: '', quantity: '' });
+  const [newItem, setNewItem] = useState({ name: '', category: '1', keywords: '', condition: 'New', price: '', quantity: '', image_url: '' });
+  const handleImageUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setNewItem({...newItem, image_url: reader.result}); // Converts file to Base64 string!
+      };
+      reader.readAsDataURL(file);
+    }
+  };
   const [formLoading, setFormLoading] = useState(false);
 
   const fetchItems = async () => {
@@ -24,27 +34,21 @@ export default function SellerInventory({ sessionId }) {
           // If the backend actually sends JSON objects, return them directly
           if (typeof itemStr === 'object') return itemStr; 
           
-          // Detect if the string uses commas or pipes to separate fields
-          const delimiter = itemStr.includes('|') ? '|' : ',';
-          const parts = itemStr.split(delimiter).map(p => p.trim());
+          // The exact format your Python code sends: "ID:1.1 | Wireless Mouse ($25.0) Qty:100"
+          // We use Regex to slice out the exact values!
+          const match = itemStr.match(/ID:\s*([\d\.]+)\s*\|\s*(.*?)\s*\(\$([\d\.]+)\)\s*Qty:\s*(\d+)\s*\|\s*IMG:\s*(.*)/i);
           
-          const obj = {};
-          parts.forEach(part => {
-            const splitIndex = part.indexOf(':');
-            if (splitIndex > -1) {
-              const key = part.slice(0, splitIndex).trim().toLowerCase();
-              const val = part.slice(splitIndex + 1).trim();
-              obj[key] = val;
-            }
-          });
+          if (match) {
+            return {
+              id: match[1], name: match[2].trim(), price: match[3], qty: match[4],
+              image: match[5] && match[5] !== "None" ? match[5] : null,
+              category: match[1].split('.')[0] 
+            };
+          }
 
+          // Safety fallback just in case a string comes back completely malformed
           return {
-            // Check for various ways your backend might have named the keys (lowercased)
-            id: obj['item id'] || obj['id'] || 'N/A',
-            name: obj['name'] || obj['item name'] || 'Unknown',
-            price: obj['price'] ? obj['price'].replace('$', '') : '0',
-            qty: obj['quantity'] || obj['qty'] || obj['stock'] || '0',
-            category: obj['category'] || obj['cat'] || 'N/A'
+            id: 'N/A', name: 'Parsing Error', price: '0', qty: '0', category: 'N/A'
           };
         });
         
@@ -229,6 +233,17 @@ export default function SellerInventory({ sessionId }) {
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Search Keywords</label>
                 <input required type="text" className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-teal-500 outline-none" value={newItem.keywords} onChange={e => setNewItem({...newItem, keywords: e.target.value})} placeholder="e.g. electronics, mouse, wireless" />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Product Photo</label>
+                <input 
+                  type="file" accept="image/*" 
+                  onChange={handleImageUpload} 
+                  className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-bold file:bg-teal-50 file:text-teal-700 hover:file:bg-teal-100 transition-colors"
+                />
+                {newItem.image_url && (
+                  <img src={newItem.image_url} alt="Preview" className="mt-3 h-24 w-24 object-cover rounded-xl border border-slate-200 shadow-sm" />
+                )}
               </div>
 
               <div className="pt-4 border-t border-slate-100">

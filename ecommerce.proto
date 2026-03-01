@@ -39,6 +39,7 @@ service ProductService {
     rpc GetSellerStats (UserRequest) returns (RatingResponse);
     rpc CreatePromo (PromoRequest) returns (ResponseMsg);
     rpc GetPromo (PromoGetRequest) returns (PromoResponse);
+    rpc GetSellerPromos (UserRequest) returns (PromoListResponse);
 }
 
 message Empty {}
@@ -95,6 +96,10 @@ message RatingResponse {
     repeated Review reviews = 2;  
     string status = 3;
     string message = 4;  
+    
+    // NEW: Separate fields for item stats
+    double item_avg_rating = 5;         
+    repeated Review item_reviews = 6;   
 }
 
 message FeedbackRequest {
@@ -105,7 +110,16 @@ message FeedbackRequest {
     string reviewer = 5; 
 }
 
-message ItemRequest { string name = 1; int32 category = 2; string keywords = 3; string condition = 4; double price = 5; int32 quantity = 6; string seller = 7; }
+message ItemRequest { 
+    string name = 1;
+    int32 category = 2; 
+    string keywords = 3; 
+    string condition = 4; 
+    double price = 5; 
+    int32 quantity = 6;
+    string seller = 7; 
+    string image_url = 8; // NEW: Accept image strings
+}
 
 message ItemResponse {
     bool success = 1;
@@ -117,8 +131,9 @@ message ItemResponse {
     int32 fb_up = 7;
     int32 fb_down = 8;
     string condition = 9;
-    repeated Review reviews = 10;   // NEW
-    double avg_rating = 11;         // NEW
+    repeated Review reviews = 10;
+    double avg_rating = 11;         
+    string image_url = 12; // NEW: Return image strings
 }
 
 message IDRequest { string id = 1; }
@@ -169,4 +184,11 @@ message PromoResponse {
     double discount_pct = 4;
     string seller = 5;      
     string message = 6;
+    string code = 7; // NEW: We added code here!
+}
+
+// NEW: A message to hold a list of promos
+message PromoListResponse {
+    bool success = 1;
+    repeated PromoResponse promos = 2;
 }

@@ -48,7 +48,7 @@ export default function ItemModal({ isOpen, onClose, itemId, sessionId }) {
       const data = await response.json();
       if (data.status === 'SUCCESS') {
         alert("🎉 Item added to cart successfully!");
-        onClose(); // Close modal after adding
+        onClose(); 
       } else {
         alert(`❌ Error: ${data.message}`);
       }
@@ -59,7 +59,7 @@ export default function ItemModal({ isOpen, onClose, itemId, sessionId }) {
     }
   };
 
- const renderStars = (rating) => {
+  const renderStars = (rating) => {
     const safeRating = rating || 0; 
 
     return [...Array(5)].map((_, index) => {
@@ -68,12 +68,10 @@ export default function ItemModal({ isOpen, onClose, itemId, sessionId }) {
 
       return (
         <div key={index} className="relative w-5 h-5 flex-shrink-0">
-          {/* Background Gray Star */}
           <svg className="absolute top-0 left-0 w-5 h-5 text-gray-200" fill="currentColor" viewBox="0 0 20 20">
             <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
           </svg>
           
-          {/* Foreground Yellow Star (Full or Half) */}
           {(isFull || isHalf) && (
             <svg 
               className="absolute top-0 left-0 h-5 w-5 text-yellow-400" 
@@ -93,7 +91,6 @@ export default function ItemModal({ isOpen, onClose, itemId, sessionId }) {
     <AnimatePresence>
       {isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
-          {/* Dark Blurred Backdrop */}
           <motion.div 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -102,7 +99,6 @@ export default function ItemModal({ isOpen, onClose, itemId, sessionId }) {
             className="absolute inset-0 bg-black/60 backdrop-blur-md"
           />
 
-          {/* The Modal Card */}
           <motion.div 
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -111,14 +107,13 @@ export default function ItemModal({ isOpen, onClose, itemId, sessionId }) {
             className="relative w-full max-w-2xl bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
           >
             {/* Header / Banner Area */}
-            <div className="h-32 sm:h-40 bg-gradient-to-br from-indigo-600 via-purple-600 to-indigo-800 relative flex items-center justify-center">
+            <div className="h-16 sm:h-20 bg-gradient-to-br from-indigo-600 via-purple-600 to-indigo-800 relative flex items-center justify-center shrink-0">
               <button 
                 onClick={onClose}
-                className="absolute top-4 right-4 p-2 bg-white/20 hover:bg-white/40 rounded-full backdrop-blur-sm transition-colors text-white"
+                className="absolute top-4 right-4 p-2 bg-white/20 hover:bg-white/40 rounded-full backdrop-blur-sm transition-colors text-white z-10"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
               </button>
-              <svg className="w-16 h-16 text-white/30" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
             </div>
 
             {/* Content Body */}
@@ -133,6 +128,20 @@ export default function ItemModal({ isOpen, onClose, itemId, sessionId }) {
               ) : itemData && (
                 <div className="space-y-8">
                   
+                  {/* Product Image Panel */}
+                  <div className="w-full bg-gray-50 flex flex-col justify-center items-center border border-gray-100 rounded-2xl p-4 min-h-[300px] relative overflow-hidden">
+                    {itemData.image_url ? (
+                       <img src={itemData.image_url} alt={itemData.name} className="w-full h-full object-cover rounded-xl shadow-sm absolute inset-0" />
+                    ) : (
+                       <>
+                         <div className="w-24 h-24 bg-white rounded-full shadow-sm flex items-center justify-center mb-4">
+                            <svg className="w-12 h-12 text-indigo-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
+                         </div>
+                         <span className="text-gray-400 font-medium text-sm">No Image Provided</span>
+                       </>
+                    )}
+                  </div>
+
                   {/* Title & Price Section */}
                   <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
                     <div>
@@ -156,23 +165,23 @@ export default function ItemModal({ isOpen, onClose, itemId, sessionId }) {
                     </div>
                   </div>
 
-               {/* Seller Info Box */}
-               <div className="bg-gray-50 rounded-2xl p-4 flex items-center justify-between border border-gray-100">
-                 <div className="flex items-center gap-3">
-                   <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center">
-                     <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
-                   </div>
-                   <div>
-                     <p className="text-xs text-gray-500 font-bold uppercase">Sold by</p>
-                     <button 
-                       onClick={() => setIsSellerModalOpen(true)}
-                       className="text-sm font-bold text-indigo-600 hover:text-indigo-800 hover:underline transition-all text-left"
-                     >
-                       {itemData.seller}
-                     </button>
-                   </div>
-                 </div>
-               </div>
+                  {/* Seller Info Box */}
+                  <div className="bg-gray-50 rounded-2xl p-4 flex items-center justify-between border border-gray-100">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center">
+                        <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500 font-bold uppercase">Sold by</p>
+                        <button 
+                          onClick={() => setIsSellerModalOpen(true)}
+                          className="text-sm font-bold text-indigo-600 hover:text-indigo-800 hover:underline transition-all text-left"
+                        >
+                          {itemData.seller}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
 
                   {/* Reviews Section */}
                   <div>
@@ -200,7 +209,7 @@ export default function ItemModal({ isOpen, onClose, itemId, sessionId }) {
 
             {/* Footer Action Area */}
             {itemData && (
-              <div className="p-6 border-t border-gray-100 bg-gray-50 flex gap-4">
+              <div className="p-6 border-t border-gray-100 bg-gray-50 flex gap-4 shrink-0">
                 <button 
                   onClick={async () => {
                     try {
@@ -234,10 +243,10 @@ export default function ItemModal({ isOpen, onClose, itemId, sessionId }) {
             )}
           </motion.div>
           <SellerModal 
-         isOpen={isSellerModalOpen} 
-         onClose={() => setIsSellerModalOpen(false)} 
-         sellerId={itemData?.seller} 
-       />
+            isOpen={isSellerModalOpen} 
+            onClose={() => setIsSellerModalOpen(false)} 
+            sellerId={itemData?.seller} 
+          />
         </div>
       )}
     </AnimatePresence>

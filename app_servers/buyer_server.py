@@ -112,7 +112,8 @@ def get_item():
             "category": resp.item_id.split('.')[0], 
             "rating": round(resp.avg_rating, 1),
             "reviews": reviews,                 
-            "quantity": resp.quantity, "seller": resp.seller
+            "quantity": resp.quantity, "seller": resp.seller,
+            "image_url": resp.image_url # ADDED THIS LINE
         })
     return jsonify({"status": "FAIL", "message": "Item not found"})
 
@@ -257,12 +258,43 @@ def manage_cart():
                 enriched_cart.append({
                     "id": item['id'], "name": p_resp.name, "price": p_resp.price, 
                     "qty": item['qty'], "item_total": round(item_total, 2),
-                    "discount_applied": round(discount_amount, 2)
+                    "discount_applied": round(discount_amount, 2),
+                    "seller": p_resp.seller,
+                    "category": item['id'].split('.')[0]
                 })
             else: 
                 enriched_cart.append({"id": item['id'], "name": "UNKNOWN", "qty": item['qty'], "price": 0, "item_total": 0, "discount_applied": 0})
                 
-        return jsonify({"status": "SUCCESS", "cart": enriched_cart, "grand_total": round(grand_total, 2), "promo_msg": promo_msg})
+        # --- NEW CODE: FETCH AVAILABLE PROMOS FOR THE CART ---
+        suggested_promos = []
+        try:
+            # 1. Find all unique sellers in the user's cart
+            sellers_in_cart = set([item['seller'] for item in enriched_cart if 'seller' in item])
+            
+            # 2. Fetch all promos for each of those sellers
+            for seller in sellers_in_cart:
+                promos_resp = prod_stub.GetSellerPromos(ecommerce_pb2.UserRequest(query=seller))
+                
+                # 3. Check if any of the seller's promos actually apply to the items in the cart
+                for p in promos_resp.promos:
+                    for item in enriched_cart:
+                        if item.get('seller') == seller:
+                            if p.target_type == 'ITEM' and p.target_val == item['id']:
+                                suggested_promos.append(f"Use code '{p.code}' for {p.discount_pct}% off {item['name']}!")
+                                break # Move to next promo
+                            elif p.target_type == 'CATEGORY' and p.target_val == item['category']:
+                                suggested_promos.append(f"Use code '{p.code}' for {p.discount_pct}% off Category {p.target_val} items!")
+                                break # Move to next promo
+        except Exception as e:
+            print(f"Promo fetch error: {e}")
+
+        return jsonify({
+            "status": "SUCCESS", 
+            "cart": enriched_cart, 
+            "grand_total": round(grand_total, 2), 
+            "promo_msg": promo_msg,
+            "suggested_promos": suggested_promos # Pass to React!
+        })
     
     if request.method == 'POST': 
         item_id = request.json.get('item_id')

@@ -82,10 +82,11 @@ def manage_items():
         if not is_valid_price(d.get('price')): return jsonify({"status": "FAIL", "message": "Invalid Price"})
         if not is_valid_qty(d.get('quantity')): return jsonify({"status": "FAIL", "message": "Invalid Quantity"})
         
+        # ADDED image_url below
         resp = prod_stub.RegisterItem(ecommerce_pb2.ItemRequest(
             name=d['name'], category=int(d['category']), keywords=d['keywords'],
             condition=d['condition'], price=float(d['price']), quantity=int(d['quantity']),
-            seller=valid.username
+            seller=valid.username, image_url=d.get('image_url', '')
         ))
         return jsonify({"status": "SUCCESS", "item_id": resp.item_id})
 
@@ -113,7 +114,7 @@ def update_qty():
     valid = cust_stub.ValidateSession(ecommerce_pb2.SessionRequest(sess_id=sess_id))
     if not valid.success: return jsonify({"status": "FAIL", "message": "Login First"})
 
-    resp = prod_stub.UpdateQty(ecommerce_pb2.UpdateQtyRequest(item_id=str(data.get('item_id')), qty_change=int(qty)))
+    resp = prod_stub.UpdateQty(ecommerce_pb2.UpdateQtyRequest(item_id=str(data.get('item_id')), qty_change=-int(qty)))
     if resp.success:
         return jsonify({"status": "SUCCESS", "message": "Stock Updated"})
     else:
@@ -152,30 +153,40 @@ def get_rating():
     
     resp = prod_stub.GetSellerStats(ecommerce_pb2.UserRequest(query=valid.username))
     
-    reviews = [{"user": r.reviewer, "stars": r.stars, "review": r.text} for r in resp.reviews]
+    seller_reviews = [{"user": r.reviewer, "stars": r.stars, "review": r.text} for r in resp.reviews]
+    item_reviews = [{"user": r.reviewer, "stars": r.stars, "review": r.text} for r in resp.item_reviews]
     
     return jsonify({
         "status": resp.status, 
-        "avg_rating": round(resp.avg_rating, 1),
-        "reviews": reviews,
+        "seller_avg": round(resp.avg_rating, 1),
+        "seller_reviews": seller_reviews,
+        "item_avg": round(resp.item_avg_rating, 1),
+        "item_reviews": item_reviews,
         "message": resp.message
     })
 
-@app.route('/promo', methods=['POST'])
-def create_promo():
-    data = request.json
-    sess_id = data.get('sess_id')
+@app.route('/promo', methods=['POST', 'GET'])
+def manage_promo():
+    # Allow passing sess_id via URL (GET) or Body (POST)
+    sess_id = request.args.get('sess_id') or (request.json and request.json.get('sess_id'))
     valid = cust_stub.ValidateSession(ecommerce_pb2.SessionRequest(sess_id=sess_id))
     if not valid.success: return jsonify({"status": "FAIL", "message": "Login First"})
 
-    resp = prod_stub.CreatePromo(ecommerce_pb2.PromoRequest(
-        seller=valid.username, 
-        target_type=data['target_type'], 
-        target_val=str(data['target_val']), 
-        code=data['code'].upper(), 
-        discount_pct=float(data['discount'])
-    ))
-    return jsonify({"status": "SUCCESS" if resp.success else "FAIL", "message": resp.message})
+    if request.method == 'GET':
+        resp = prod_stub.GetSellerPromos(ecommerce_pb2.UserRequest(query=valid.username))
+        promos = [{"code": p.code, "type": p.target_type, "target": p.target_val, "pct": p.discount_pct} for p in resp.promos]
+        return jsonify({"status": "SUCCESS", "promos": promos})
+
+    if request.method == 'POST':
+        data = request.json
+        resp = prod_stub.CreatePromo(ecommerce_pb2.PromoRequest(
+            seller=valid.username, 
+            target_type=data['target_type'], 
+            target_val=str(data['target_val']), 
+            code=data['code'].upper(), 
+            discount_pct=float(data['discount'])
+        ))
+        return jsonify({"status": "SUCCESS" if resp.success else "FAIL", "message": resp.message})
 
 @app.route('/item', methods=['GET'])
 def get_item():

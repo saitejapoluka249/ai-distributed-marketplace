@@ -9,6 +9,7 @@ export default function Cart({ isOpen, onClose, sessionId }) {
   const [loading, setLoading] = useState(false);
   const [promoCode, setPromoCode] = useState('');
   const [promoMsg, setPromoMsg] = useState('');
+  const [suggestedPromos, setSuggestedPromos] = useState([]); // <-- NEW STATE
   
   const [isCheckout, setIsCheckout] = useState(false);
   const [paymentData, setPaymentData] = useState({ name: '', cc: '', exp: '', cvv: '' });
@@ -23,6 +24,7 @@ export default function Cart({ isOpen, onClose, sessionId }) {
         setCart(data.cart);
         setGrandTotal(data.grand_total);
         setPromoMsg(data.promo_msg || '');
+        setSuggestedPromos(data.suggested_promos || []); // <-- ADD THIS LINE
       }
     } catch (err) {
       console.error("Failed to fetch cart");
@@ -172,18 +174,36 @@ export default function Cart({ isOpen, onClose, sessionId }) {
                     </div>
                   ))}
 
-                  {/* Promo Code Section */}
-                  <form onSubmit={handleApplyPromo} className="flex gap-2 pt-4">
-                    <input 
-                      type="text" 
-                      placeholder="Promo Code" 
-                      value={promoCode}
-                      onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
-                      className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none uppercase"
-                    />
-                    <button type="submit" className="bg-gray-900 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-gray-800 transition">Apply</button>
-                  </form>
-                  {promoMsg && <p className={`text-sm font-bold ${promoMsg.includes('Invalid') ? 'text-red-500' : 'text-green-600'}`}>{promoMsg}</p>}
+                {/* Promo Code Section */}
+              <form onSubmit={handleApplyPromo} className="flex gap-2 pt-4 border-t border-gray-100">
+                <input 
+                  type="text" 
+                  placeholder="Promo Code" 
+                  value={promoCode}
+                  onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
+                  className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none uppercase"
+                />
+                <button type="submit" className="bg-gray-900 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-gray-800 transition">Apply</button>
+              </form>
+              {promoMsg && <p className={`text-sm font-bold ${promoMsg.includes('Invalid') ? 'text-red-500' : 'text-green-600'}`}>{promoMsg}</p>}
+
+              {/* PROMO SUGGESTIONS BOX */}
+              {suggestedPromos && suggestedPromos.length > 0 && (
+                <div className="mt-4 bg-teal-50 border border-teal-100 rounded-xl p-4">
+                  <p className="text-xs font-bold text-teal-800 uppercase tracking-wider mb-2 flex items-center gap-1">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path></svg>
+                    Available Offers
+                  </p>
+                  <ul className="space-y-1">
+                    {suggestedPromos.map((msg, i) => (
+                      <li key={i} className="text-sm font-medium text-teal-700 flex items-start gap-2">
+                        <span className="text-teal-400 mt-0.5">•</span>
+                        {msg}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
                 </div>
               ) : (
                 /* CHECKOUT VIEW */

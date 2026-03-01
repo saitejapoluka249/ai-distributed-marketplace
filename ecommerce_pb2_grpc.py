@@ -176,8 +176,7 @@ class CustomerServiceServicer(object):
         raise NotImplementedError('Method not implemented!')
 
     def UpdateFeedback(self, request, context):
-        """Legacy, kept for customer_db
-        """
+        """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
@@ -979,6 +978,11 @@ class ProductServiceStub(object):
                 request_serializer=ecommerce__pb2.PromoGetRequest.SerializeToString,
                 response_deserializer=ecommerce__pb2.PromoResponse.FromString,
                 _registered_method=True)
+        self.GetSellerPromos = channel.unary_unary(
+                '/ecommerce.ProductService/GetSellerPromos',
+                request_serializer=ecommerce__pb2.UserRequest.SerializeToString,
+                response_deserializer=ecommerce__pb2.PromoListResponse.FromString,
+                _registered_method=True)
 
 
 class ProductServiceServicer(object):
@@ -1021,8 +1025,7 @@ class ProductServiceServicer(object):
         raise NotImplementedError('Method not implemented!')
 
     def UpdateItemFeedback(self, request, context):
-        """NEW REVIEW ENDPOINTS
-        """
+        """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
@@ -1046,6 +1049,12 @@ class ProductServiceServicer(object):
         raise NotImplementedError('Method not implemented!')
 
     def GetPromo(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetSellerPromos(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -1108,6 +1117,11 @@ def add_ProductServiceServicer_to_server(servicer, server):
                     servicer.GetPromo,
                     request_deserializer=ecommerce__pb2.PromoGetRequest.FromString,
                     response_serializer=ecommerce__pb2.PromoResponse.SerializeToString,
+            ),
+            'GetSellerPromos': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetSellerPromos,
+                    request_deserializer=ecommerce__pb2.UserRequest.FromString,
+                    response_serializer=ecommerce__pb2.PromoListResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -1407,6 +1421,33 @@ class ProductService(object):
             '/ecommerce.ProductService/GetPromo',
             ecommerce__pb2.PromoGetRequest.SerializeToString,
             ecommerce__pb2.PromoResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetSellerPromos(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/ecommerce.ProductService/GetSellerPromos',
+            ecommerce__pb2.UserRequest.SerializeToString,
+            ecommerce__pb2.PromoListResponse.FromString,
             options,
             channel_credentials,
             insecure,

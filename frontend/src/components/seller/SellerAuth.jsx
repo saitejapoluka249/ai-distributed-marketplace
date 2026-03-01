@@ -10,10 +10,13 @@ export default function SellerAuth({ onLoginSuccess, switchToBuyer }) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const [successMsg, setSuccessMsg] = useState(''); // NEW STATE FOR SUCCESS MESSAGES
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError('');
+    setSuccessMsg(''); // Clear old success messages
 
     const endpoint = isLogin ? '/login' : '/create_account';
     try {
@@ -25,7 +28,15 @@ export default function SellerAuth({ onLoginSuccess, switchToBuyer }) {
       const data = await response.json();
 
       if (data.status === 'SUCCESS') {
-        onLoginSuccess(data.sess_id, username, 'SELLER');
+        if (isLogin) {
+          // If they were logging in, grant access!
+          onLoginSuccess(data.sess_id, username, 'SELLER');
+        } else {
+          // If they were registering, show success and switch to Login view
+          setSuccessMsg('✅ Store registered successfully! Please sign in below.');
+          setIsLogin(true); // Switch the form back to "Sign In" mode
+          setPassword(''); // Clear the password for security
+        }
       } else {
         setError(data.message || 'Authentication failed.');
       }
@@ -63,6 +74,9 @@ export default function SellerAuth({ onLoginSuccess, switchToBuyer }) {
             </div>
 
             {error && <div className="text-sm text-red-400 bg-red-900/30 border border-red-800 p-3 rounded-lg font-bold">{error}</div>}
+            
+            {/* NEW SUCCESS MESSAGE BOX */}
+            {successMsg && <div className="text-sm text-emerald-400 bg-emerald-900/30 border border-emerald-800 p-3 rounded-lg font-bold">{successMsg}</div>}
 
             <button type="submit" disabled={loading} className="w-full flex justify-center py-3 px-4 border border-transparent rounded-xl shadow-sm text-sm font-bold text-white bg-teal-600 hover:bg-teal-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 focus:ring-offset-slate-900 transition-all disabled:opacity-50">
               {loading ? 'Authenticating...' : isLogin ? 'Access Dashboard' : 'Register Store'}
