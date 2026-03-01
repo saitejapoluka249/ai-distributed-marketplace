@@ -4,10 +4,12 @@ import ecommerce_pb2
 import ecommerce_pb2_grpc
 import os
 from dotenv import load_dotenv
+from flask_cors import CORS
 
 load_dotenv()
 
 app = Flask(__name__)
+CORS(app)
 
 SELLER_SERVER_HOST = os.getenv("SELLER_SERVER_HOST", "0.0.0.0")
 SELLER_SERVER_PORT = int(os.getenv("SELLER_SERVER_PORT", 7001))

@@ -132,13 +132,11 @@ class CustomerService(ecommerce_pb2_grpc.CustomerServiceServicer):
     
 
     def ValidateSession(self, request, context):
-        row = self._execute("SELECT username, last_active FROM sessions WHERE sess_id = ?", (request.sess_id,), fetch_one=True)
+        row = self._execute("SELECT username FROM sessions WHERE sess_id = ?", (request.sess_id,), fetch_one=True)
         if row:
-            if (time.time() - row[1]) > 300: 
-                self._execute("DELETE FROM sessions WHERE sess_id = ?", (request.sess_id,), commit=True)
-                return ecommerce_pb2.ValidateResponse(success=False, username="")
             self._execute("UPDATE sessions SET last_active = ? WHERE sess_id = ?", (time.time(), request.sess_id), commit=True)
             return ecommerce_pb2.ValidateResponse(success=True, username=row[0])
+            
         return ecommerce_pb2.ValidateResponse(success=False, username="")
 
     def Logout(self, request, context):

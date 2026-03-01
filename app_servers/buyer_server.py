@@ -7,10 +7,12 @@ import re
 import os
 from dotenv import load_dotenv
 from zeep import Client as SoapClient 
+from flask_cors import CORS
 
 load_dotenv()
 
 app = Flask(__name__)
+CORS(app)
 
 BUYER_SERVER_HOST = os.getenv("BUYER_SERVER_HOST", "0.0.0.0")
 BUYER_SERVER_PORT = int(os.getenv("BUYER_SERVER_PORT", 7003))
@@ -279,16 +281,26 @@ def manage_cart():
             return jsonify({"status": "FAIL", "message": f"Stock Limit Exceeded! Max: {item_resp.quantity}"})
         
         cust_stub.AddToCart(ecommerce_pb2.CartItemRequest(sess_id=sess_id, item_id=item_id, qty=qty_to_add))
+        
+        cust_stub.SaveCart(ecommerce_pb2.SessionRequest(sess_id=sess_id))
+        
         return jsonify({"status": "SUCCESS"})
 
     if request.method == 'DELETE': 
         qty = request.json.get('qty')
         if not is_valid_qty(qty): return jsonify({"status": "FAIL", "message": "Invalid Quantity"})
+        
         cust_stub.RemoveFromCart(ecommerce_pb2.CartItemRequest(sess_id=sess_id, item_id=request.json['item_id'], qty=int(qty)))
+        
+        cust_stub.SaveCart(ecommerce_pb2.SessionRequest(sess_id=sess_id))
+        
         return jsonify({"status": "SUCCESS"})
 
     if request.method == 'PUT': 
         cust_stub.ClearCart(ecommerce_pb2.SessionRequest(sess_id=sess_id))
+        
+        cust_stub.SaveCart(ecommerce_pb2.SessionRequest(sess_id=sess_id))
+        
         return jsonify({"status": "SUCCESS"})
 
 @app.route('/save_cart', methods=['POST'])
@@ -303,7 +315,7 @@ def get_orders():
     if not valid.success: return jsonify({"status": "FAIL", "message": "Login First"})
     
     resp = cust_stub.GetBuyerOrders(ecommerce_pb2.UserRequest(query=valid.username))
-    orders = [{"order_id": o.order_id, "seller": o.seller, "item": o.item_name, "qty": o.qty, "total": o.total_price, "status": o.status} for o in resp.orders]
+    orders = [{"order_id": o.order_id,"item_id": o.item_id, "seller": o.seller, "item": o.item_name, "qty": o.qty, "total": o.total_price, "status": o.status} for o in resp.orders]
     
     return jsonify({"status": "SUCCESS", "orders": orders})
 

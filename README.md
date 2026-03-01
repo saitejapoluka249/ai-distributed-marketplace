@@ -43,7 +43,7 @@ This system follows a strict 3-tier distributed design:
 1. **Clone the repository:**
 
    ```bash
-   git clone [https://github.com/saitejapoluka249/ai-distributed-marketplace.git](https://github.com/yourusername/ai-distributed-marketplace.git)
+   git clone https://github.com/saitejapoluka249/ai-distributed-marketplace.git
    cd ai-distributed-marketplace
 
    ```
@@ -51,8 +51,8 @@ This system follows a strict 3-tier distributed design:
 2. **Set up the virtual environment:**
 
    ```bash
-   python3 -m venv venv
-   source venv/bin/activate
+   python3 -m venv venv_ai_marketplace
+   source venv_ai_marketplace/bin/activate
    pip install -r requirements.txt
 
    ```
