@@ -25,12 +25,11 @@ export default function SellerOrders({ sessionId }) {
     if (sessionId) fetchOrders();
   }, [sessionId]);
 
-  const handleUpdateStatus = async (orderId, currentStatus) => {
-    // Determine the next logical status
+  const handleUpdateStatus = async (orderId, currentStatus, buyerUsername) => {
     let nextStatus = '';
     if (currentStatus === 'PROCESSING') nextStatus = 'SHIPPED';
     else if (currentStatus === 'SHIPPED') nextStatus = 'DELIVERED';
-    else return; // If delivered, do nothing
+    else return; 
 
     if (!window.confirm(`Are you sure you want to mark this order as ${nextStatus}?`)) return;
 
@@ -38,12 +37,17 @@ export default function SellerOrders({ sessionId }) {
       const response = await fetch(`${SELLER_URL}/orders`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sess_id: sessionId, order_id: orderId, status: nextStatus })
+        body: JSON.stringify({ 
+          sess_id: sessionId, 
+          order_id: orderId, 
+          status: nextStatus,
+          buyer: buyerUsername 
+        })
       });
       const data = await response.json();
       
       if (data.status === 'SUCCESS') {
-        fetchOrders(); // Refresh the list to show the new status!
+        fetchOrders(); 
       } else {
         alert(`❌ Error: ${data.message}`);
       }
@@ -52,7 +56,6 @@ export default function SellerOrders({ sessionId }) {
     }
   };
 
-  // Helper to render beautiful professional badges
   const renderStatusBadge = (status) => {
     switch (status) {
       case 'PROCESSING':
@@ -93,6 +96,7 @@ export default function SellerOrders({ sessionId }) {
                 <th className="py-4 px-6 text-xs font-bold text-slate-500 uppercase tracking-wider">Item Details</th>
                 <th className="py-4 px-6 text-xs font-bold text-slate-500 uppercase tracking-wider">Total Value</th>
                 <th className="py-4 px-6 text-xs font-bold text-slate-500 uppercase tracking-wider">Status</th>
+                <th className="py-4 px-6 text-xs font-bold text-slate-500 uppercase tracking-wider">Date & Time</th>
                 <th className="py-4 px-6 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Fulfillment Action</th>
               </tr>
             </thead>
@@ -114,10 +118,11 @@ export default function SellerOrders({ sessionId }) {
                     </td>
                     <td className="py-4 px-6 text-sm font-bold text-slate-900">${parseFloat(order.total).toFixed(2)}</td>
                     <td className="py-4 px-6">{renderStatusBadge(order.status)}</td>
+                    <td className="py-4 px-6 text-sm text-gray-500">{order.timestamp}</td>
                     <td className="py-4 px-6 text-right">
-                      {order.status === 'PROCESSING' && (
+                    {order.status === 'PROCESSING' && (
                         <button 
-                          onClick={() => handleUpdateStatus(order.order_id, order.status)}
+                          onClick={() => handleUpdateStatus(order.order_id, order.status, order.buyer)}
                           className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg transition-colors shadow-sm"
                         >
                           Mark as Shipped
@@ -125,7 +130,7 @@ export default function SellerOrders({ sessionId }) {
                       )}
                       {order.status === 'SHIPPED' && (
                         <button 
-                          onClick={() => handleUpdateStatus(order.order_id, order.status)}
+                          onClick={() => handleUpdateStatus(order.order_id, order.status, order.buyer)}
                           className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg transition-colors shadow-sm"
                         >
                           Mark Delivered

@@ -26,18 +26,26 @@ def init_db():
     conn.execute("PRAGMA journal_mode=WAL")
     cursor = conn.cursor()
     cursor.execute('''CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT UNIQUE, password TEXT, role TEXT,
-        feedback_up INTEGER DEFAULT 0, feedback_down INTEGER DEFAULT 0,
-        saved_cart TEXT DEFAULT '[]', cart_version INTEGER DEFAULT 0,
-        purchase_history TEXT DEFAULT '[]',
-        wishlist TEXT DEFAULT '[]')''')
+            id INTEGER PRIMARY KEY AUTOINCREMENT, 
+            username TEXT UNIQUE, 
+            password TEXT, 
+            role TEXT,
+            feedback_up INTEGER DEFAULT 0, 
+            feedback_down INTEGER DEFAULT 0,
+            saved_cart TEXT DEFAULT '[]', 
+            cart_version INTEGER DEFAULT 0,
+            purchase_history TEXT DEFAULT '[]',
+            wishlist TEXT DEFAULT '[]',
+            email TEXT DEFAULT '',
+            photo_url TEXT DEFAULT ''
+        )''')
     cursor.execute('''CREATE TABLE IF NOT EXISTS sessions (
         sess_id TEXT PRIMARY KEY, username TEXT, last_active REAL,
         current_cart TEXT DEFAULT '[]', cart_version INTEGER DEFAULT 0)''')
     cursor.execute('''CREATE TABLE IF NOT EXISTS orders (
-        order_id TEXT PRIMARY KEY, buyer TEXT, seller TEXT, item_id TEXT, 
-        item_name TEXT, qty INTEGER, total_price REAL, status TEXT, timestamp REAL)''')
+            order_id TEXT PRIMARY KEY, buyer TEXT, seller TEXT, 
+            item_id TEXT, item_name TEXT, qty INTEGER, 
+            total_price REAL, status TEXT, timestamp TEXT)''') # Added timestamp
     conn.commit()
     conn.close()
 
@@ -105,21 +113,28 @@ class CustomerService(ecommerce_pb2_grpc.CustomerServiceServicer):
     def PlaceOrder(self, request, context):
         import time
         for item in request.items:
-            self._execute(
-                "INSERT INTO orders (order_id, buyer, seller, item_id, item_name, qty, total_price, status, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (item.order_id, item.buyer, item.seller, item.item_id, item.item_name, item.qty, item.total_price, item.status, time.time()), 
-                commit=True
-            )
+            self._execute("INSERT INTO orders (order_id, buyer, seller, item_id, item_name, qty, total_price, status, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                          (item.order_id, item.buyer, item.seller, item.item_id, item.item_name, item.qty, item.total_price, item.status, item.timestamp), commit=True)
         return ecommerce_pb2.ResponseMsg(success=True, message="Order Placed")
 
     def GetBuyerOrders(self, request, context):
-        rows = self._execute("SELECT order_id, seller, item_id, item_name, qty, total_price, status FROM orders WHERE buyer = ? ORDER BY timestamp DESC", (request.query,), fetch_all=True)
-        orders = [ecommerce_pb2.Order(order_id=r[0], seller=r[1], item_id=r[2], item_name=r[3], qty=r[4], total_price=r[5], status=r[6]) for r in rows]
+        rows = self._execute("SELECT order_id, buyer, seller, item_id, item_name, qty, total_price, status, timestamp FROM orders WHERE buyer = ?", (request.query,), fetch_all=True) # Change 'buyer = ?' to 'seller = ?' for GetSellerOrders
+        
+        orders = [ecommerce_pb2.Order(
+            order_id=r[0], buyer=r[1], seller=r[2], item_id=r[3], 
+            item_name=r[4], qty=r[5], total_price=r[6], status=r[7],
+            timestamp=r[8] if r[8] else "Unknown" # NEW
+        ) for r in rows]
         return ecommerce_pb2.OrderResponse(success=True, orders=orders)
 
     def GetSellerOrders(self, request, context):
-        rows = self._execute("SELECT order_id, buyer, item_id, item_name, qty, total_price, status FROM orders WHERE seller = ? ORDER BY timestamp DESC", (request.query,), fetch_all=True)
-        orders = [ecommerce_pb2.Order(order_id=r[0], buyer=r[1], item_id=r[2], item_name=r[3], qty=r[4], total_price=r[5], status=r[6]) for r in rows]
+        rows = self._execute("SELECT order_id, buyer, seller, item_id, item_name, qty, total_price, status, timestamp FROM orders WHERE seller = ?", (request.query,), fetch_all=True) # Change 'buyer = ?' to 'seller = ?' for GetSellerOrders
+        
+        orders = [ecommerce_pb2.Order(
+            order_id=r[0], buyer=r[1], seller=r[2], item_id=r[3], 
+            item_name=r[4], qty=r[5], total_price=r[6], status=r[7],
+            timestamp=r[8] if r[8] else "Unknown" # NEW
+        ) for r in rows]
         return ecommerce_pb2.OrderResponse(success=True, orders=orders)
 
     def UpdateOrderStatus(self, request, context):
@@ -271,14 +286,28 @@ class CustomerService(ecommerce_pb2_grpc.CustomerServiceServicer):
         return ecommerce_pb2.Empty()
 
     def GetUserData(self, request, context):
-        if request.query.isdigit():
-            row = self._execute("SELECT * FROM users WHERE id = ?", (int(request.query),), fetch_one=True)
-        else:
-            row = self._execute("SELECT * FROM users WHERE username = ?", (request.query,), fetch_one=True)
-        
-        if row:
-            return ecommerce_pb2.UserResponse(success=True, id=row[0], role=row[3], fb_up=row[4], fb_down=row[5], purchase_history_json=row[8])
+        user = self._execute("SELECT id, role, email, photo_url FROM users WHERE username = ?", (request.query,), fetch_one=True)
+        if user:
+            orders = self._execute("SELECT item_id FROM orders WHERE buyer = ?", (request.query,), fetch_all=True)
+            history = json.dumps([o[0] for o in orders])
+
+            return ecommerce_pb2.UserResponse(
+                success=True, id=user[0], role=user[1], fb_up=0, fb_down=0, 
+                purchase_history_json=history,
+                email=user[2], photo_url=user[3]
+            )
         return ecommerce_pb2.UserResponse(success=False)
+    
+    def UpdateProfile(self, request, context):
+        try:
+            self._execute(
+                "UPDATE users SET email = ?, photo_url = ? WHERE username = ?", 
+                (request.email, request.photo_url, request.username), 
+                commit=True
+            )
+            return ecommerce_pb2.ResponseMsg(success=True, message="Profile updated!")
+        except Exception as e:
+            return ecommerce_pb2.ResponseMsg(success=False, message=str(e))
 
 def serve():
     init_db()

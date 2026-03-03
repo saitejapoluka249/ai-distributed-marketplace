@@ -1,7 +1,39 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-leaflet';
+import L from 'leaflet';
+
+import iconUrl from 'leaflet/dist/images/marker-icon.png';
+import iconRetinaUrl from 'leaflet/dist/images/marker-icon-2x.png';
+import shadowUrl from 'leaflet/dist/images/marker-shadow.png';
+
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: iconRetinaUrl,
+  iconUrl: iconUrl,
+  shadowUrl: shadowUrl,
+});
+
+function LocationMarker({ position, setPosition, onLocationFound }) {
+  useMapEvents({
+    click(e) {
+      setPosition(e.latlng);
+      onLocationFound(e.latlng.lat, e.latlng.lng);
+    },
+  });
+  return position === null ? null : <Marker position={position}></Marker>;
+}
+
+function MapPanner({ center }) {
+  const map = useMap();
+  useEffect(() => {
+    if (center) map.flyTo(center, 15);
+  }, [center, map]);
+  return null;
+}
 
 const BASE_URL = 'http://localhost:7003';
+
 
 export default function Cart({ isOpen, onClose, sessionId }) {
   const [cart, setCart] = useState([]);
@@ -9,10 +41,19 @@ export default function Cart({ isOpen, onClose, sessionId }) {
   const [loading, setLoading] = useState(false);
   const [promoCode, setPromoCode] = useState('');
   const [promoMsg, setPromoMsg] = useState('');
-  const [suggestedPromos, setSuggestedPromos] = useState([]); // <-- NEW STATE
+  const [suggestedPromos, setSuggestedPromos] = useState([]); 
+  const [tax, setTax] = useState(0);
+  const [finalBilled, setFinalBilled] = useState(0);
+  const [mapPosition, setMapPosition] = useState(null);
+  const [mapCenter, setMapCenter] = useState([40.0150, -105.2705]);
+  const [isLocating, setIsLocating] = useState(false);
+  
   
   const [isCheckout, setIsCheckout] = useState(false);
-  const [paymentData, setPaymentData] = useState({ name: '', cc: '', exp: '', cvv: '' });
+  const [paymentData, setPaymentData] = useState({ 
+    name: '', cc: '', exp: '', cvv: '', 
+    street: '', city: '', state: '', zip: '', phone: '' 
+  });
   const [checkoutMsg, setCheckoutMsg] = useState('');
 
   const fetchCart = async (promo = '') => {
@@ -23,8 +64,10 @@ export default function Cart({ isOpen, onClose, sessionId }) {
       if (data.status === 'SUCCESS') {
         setCart(data.cart);
         setGrandTotal(data.grand_total);
+        setTax(data.tax); // NEW
+        setFinalBilled(data.final_billed);
         setPromoMsg(data.promo_msg || '');
-        setSuggestedPromos(data.suggested_promos || []); // <-- ADD THIS LINE
+        setSuggestedPromos(data.suggested_promos || []); 
       }
     } catch (err) {
       console.error("Failed to fetch cart");
@@ -85,7 +128,12 @@ export default function Cart({ isOpen, onClose, sessionId }) {
           cc_number: paymentData.cc,
           exp_date: paymentData.exp,
           sec_code: paymentData.cvv,
-          promo: promoCode
+          promo: promoCode,
+          street: paymentData.street,
+          city: paymentData.city,
+          state: paymentData.state,
+          zip: paymentData.zip,
+          phone: paymentData.phone
         })
       });
       const data = await response.json();
@@ -104,11 +152,49 @@ export default function Cart({ isOpen, onClose, sessionId }) {
     }
   };
 
+  const handleMapClick = async (lat, lng) => {
+    try {
+      const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
+      const data = await response.json();
+      
+      if (data.address) {
+        const road = data.address.road || '';
+        const houseNumber = data.address.house_number || '';
+        
+        setPaymentData(prev => ({
+          ...prev,
+          street: `${houseNumber} ${road}`.trim(),
+          city: data.address.city || data.address.town || data.address.village || '',
+          state: data.address.state || '',
+          zip: data.address.postcode || ''
+        }));
+      }
+    } catch (error) {
+      console.error("Failed to geocode location.");
+    }
+  };
+
+  const handleGetLiveLocation = () => {
+    setIsLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const { latitude, longitude } = pos.coords;
+        setMapCenter([latitude, longitude]);
+        setMapPosition({ lat: latitude, lng: longitude });
+        handleMapClick(latitude, longitude);
+        setIsLocating(false);
+      },
+      (err) => {
+        alert("Please allow location access in your browser to use GPS.");
+        setIsLocating(false);
+      }
+    );
+  };
+
   return (
     <AnimatePresence>
       {isOpen && (
         <>
-          {/* Dark overlay background */}
           <motion.div 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -117,7 +203,6 @@ export default function Cart({ isOpen, onClose, sessionId }) {
             className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40"
           />
 
-          {/* Slide-out Drawer */}
           <motion.div 
             initial={{ x: '100%' }}
             animate={{ x: 0 }}
@@ -206,24 +291,90 @@ export default function Cart({ isOpen, onClose, sessionId }) {
               )}
                 </div>
               ) : (
-                /* CHECKOUT VIEW */
-                <form id="checkout-form" onSubmit={handlePurchase} className="space-y-4">
-                  <div>
-                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Name on Card</label>
-                    <input required type="text" onChange={e => setPaymentData({...paymentData, name: e.target.value})} className="w-full border border-gray-200 rounded-lg px-4 py-3 focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="John Doe"/>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Card Number (16 Digits)</label>
-                    <input required type="text" maxLength="16" onChange={e => setPaymentData({...paymentData, cc: e.target.value})} className="w-full border border-gray-200 rounded-lg px-4 py-3 focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="1234567812345678"/>
-                  </div>
-                  <div className="flex gap-4">
-                    <div className="flex-1">
-                      <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Expiry (MM/YY)</label>
-                      <input required type="text" placeholder="12/25" onChange={e => setPaymentData({...paymentData, exp: e.target.value})} className="w-full border border-gray-200 rounded-lg px-4 py-3 focus:ring-2 focus:ring-indigo-500 outline-none"/>
+                /* EXPANDED CHECKOUT VIEW */
+                <form id="checkout-form" onSubmit={handlePurchase} className="space-y-6">
+                  
+                 {/* Shipping Section */}
+                 <div>
+                    <h3 className="font-bold text-gray-900 border-b border-gray-200 pb-2 mb-4">1. Shipping Address</h3>
+                    
+                    {/* THE INTERACTIVE MAP */}
+                    <div className="mb-6 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                      <div className="flex justify-between items-center mb-3">
+                        <p className="text-sm font-bold text-slate-700">Drop a pin or use GPS to auto-fill your address</p>
+                        <button 
+                          type="button" 
+                          onClick={handleGetLiveLocation}
+                          disabled={isLocating}
+                          className="flex items-center gap-2 px-3 py-1.5 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 text-xs font-bold rounded-lg transition-colors"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                          {isLocating ? 'Locating...' : 'Use My GPS'}
+                        </button>
+                      </div>
+                      
+                      <div className="h-64 w-full rounded-lg overflow-hidden border border-slate-300 shadow-inner z-0 relative">
+                        <MapContainer center={mapCenter} zoom={13} style={{ height: '100%', width: '100%' }}>
+                          <TileLayer
+                            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                            attribution='&copy; OpenStreetMap contributors'
+                          />
+                          <LocationMarker position={mapPosition} setPosition={setMapPosition} onLocationFound={handleMapClick} />
+                          <MapPanner center={mapCenter} />
+                        </MapContainer>
+                      </div>
                     </div>
-                    <div className="w-24">
-                      <label className="block text-xs font-bold text-gray-500 uppercase mb-1">CVV</label>
-                      <input required type="text" maxLength="3" placeholder="123" onChange={e => setPaymentData({...paymentData, cvv: e.target.value})} className="w-full border border-gray-200 rounded-lg px-4 py-3 focus:ring-2 focus:ring-indigo-500 outline-none"/>
+
+                    {/* THE MANUAL TEXT BOXES (Hybrid Approach) */}
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Full Name</label>
+                        <input required type="text" value={paymentData.name} onChange={e => setPaymentData({...paymentData, name: e.target.value})} className="w-full border border-gray-200 rounded-lg px-4 py-3 focus:ring-2 focus:ring-indigo-500 outline-none bg-white" placeholder="Enter your full name"/>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Street Address</label>
+                        <input required type="text" value={paymentData.street} onChange={e => setPaymentData({...paymentData, street: e.target.value})} className="w-full border border-gray-200 rounded-lg px-4 py-3 focus:ring-2 focus:ring-indigo-500 outline-none bg-white" placeholder="123 Main St, Apt 4B"/>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">City</label>
+                          <input required type="text" value={paymentData.city} onChange={e => setPaymentData({...paymentData, city: e.target.value})} className="w-full border border-gray-200 rounded-lg px-4 py-3 focus:ring-2 focus:ring-indigo-500 outline-none bg-white" placeholder="Enter city"/>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">State</label>
+                            <input required type="text" value={paymentData.state} onChange={e => setPaymentData({...paymentData, state: e.target.value})} className="w-full border border-gray-200 rounded-lg px-4 py-3 focus:ring-2 focus:ring-indigo-500 outline-none bg-white" placeholder="e.g. CO"/>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Zip</label>
+                            <input required type="text" value={paymentData.zip} onChange={e => setPaymentData({...paymentData, zip: e.target.value})} className="w-full border border-gray-200 rounded-lg px-4 py-3 focus:ring-2 focus:ring-indigo-500 outline-none bg-white" placeholder="Zip Code"/>
+                          </div>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Phone Number</label>
+                        <input required type="tel" value={paymentData.phone} onChange={e => setPaymentData({...paymentData, phone: e.target.value})} className="w-full border border-gray-200 rounded-lg px-4 py-3 focus:ring-2 focus:ring-indigo-500 outline-none bg-white" placeholder="(555) 000-0000"/>
+                      </div>
+                    </div>
+                  </div>
+                  {/* Payment Section */}
+                  <div>
+                    <h3 className="font-bold text-gray-900 border-b border-gray-200 pb-2 mb-4">2. Payment Details</h3>
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Card Number (16 Digits)</label>
+                        <input required type="text" maxLength="16" onChange={e => setPaymentData({...paymentData, cc: e.target.value})} className="w-full border border-gray-200 rounded-lg px-4 py-3 focus:ring-2 focus:ring-indigo-500 outline-none bg-gray-50" placeholder="1234 5678 1234 5678"/>
+                      </div>
+                      <div className="flex gap-4">
+                        <div className="flex-1">
+                          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Expiry (MM/YY)</label>
+                          <input required type="text" placeholder="12/25" onChange={e => setPaymentData({...paymentData, exp: e.target.value})} className="w-full border border-gray-200 rounded-lg px-4 py-3 focus:ring-2 focus:ring-indigo-500 outline-none bg-gray-50"/>
+                        </div>
+                        <div className="w-24">
+                          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">CVV</label>
+                          <input required type="text" maxLength="3" placeholder="123" onChange={e => setPaymentData({...paymentData, cvv: e.target.value})} className="w-full border border-gray-200 rounded-lg px-4 py-3 focus:ring-2 focus:ring-indigo-500 outline-none bg-gray-50"/>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </form>
@@ -233,17 +384,30 @@ export default function Cart({ isOpen, onClose, sessionId }) {
             {/* Footer with Total and Action Button */}
             {cart.length > 0 && !checkoutMsg && (
               <div className="p-6 border-t border-gray-100 bg-gray-50">
-                <div className="flex justify-between items-center mb-6">
-                  <span className="text-gray-600 font-medium">Grand Total</span>
-                  <span className="text-3xl font-black text-gray-900">${grandTotal}</span>
+
+                {/* NEW: Transparent Pricing Breakdown */}
+                <div className="space-y-2 mb-6">
+                  <div className="flex justify-between text-gray-500 text-sm">
+                    <span>Subtotal</span>
+                    <span>${grandTotal}</span>
+                  </div>
+                  <div className="flex justify-between text-gray-500 text-sm">
+                    <span>Estimated Tax (8%)</span>
+                    <span>${tax}</span>
+                  </div>
+                  <div className="flex justify-between items-center pt-2 border-t border-gray-200 mt-2">
+                    <span className="text-gray-900 font-bold">Total Billed</span>
+                    <span className="text-3xl font-black text-gray-900">${finalBilled}</span>
+                  </div>
                 </div>
+
                 {!isCheckout ? (
                   <button onClick={() => setIsCheckout(true)} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 rounded-xl shadow-lg transition-colors">
                     Proceed to Checkout
                   </button>
                 ) : (
                   <button form="checkout-form" type="submit" disabled={loading} className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-4 rounded-xl shadow-lg transition-colors flex justify-center items-center gap-2">
-                    {loading ? 'Processing...' : `Pay $${grandTotal}`}
+                    {loading ? 'Processing...' : `Pay $${finalBilled}`}
                   </button>
                 )}
               </div>

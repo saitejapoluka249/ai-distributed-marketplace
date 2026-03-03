@@ -8,6 +8,9 @@ import os
 from dotenv import load_dotenv
 from zeep import Client as SoapClient 
 from flask_cors import CORS
+import smtplib
+from email.message import EmailMessage
+import datetime
 
 load_dotenv()
 
@@ -19,6 +22,9 @@ BUYER_SERVER_PORT = int(os.getenv("BUYER_SERVER_PORT", 7003))
 
 CUSTOMER_DB_ADDR = f"{os.getenv('CUSTOMER_DB_HOST')}:{os.getenv('CUSTOMER_DB_PORT')}"
 PRODUCT_DB_ADDR  = f"{os.getenv('PRODUCT_DB_HOST')}:{os.getenv('PRODUCT_DB_PORT')}"
+
+SENDER_EMAIL = os.getenv("SENDER_EMAIL")
+SENDER_PASSWORD = os.getenv("SENDER_PASSWORD")
 
 channel_options = [
     ('grpc.max_concurrent_streams', 200),
@@ -44,6 +50,90 @@ def is_strong_password(password):
     if not any(c.islower() for c in password): return False, "Password needs at least one lowercase letter."
     if not any(c.isdigit() for c in password): return False, "Password needs at least one number."
     return True, ""
+
+def send_order_confirmation(to_email, order_items, payment_data, subtotal, discount, tax, final_billed):
+    if not to_email: 
+        return
+        
+    order_id_display = order_items[0].order_id[:8].upper()
+
+    items_html = ""
+    for item in order_items:
+        items_html += f"""
+        <tr>
+            <td style="padding: 10px; border-bottom: 1px solid #eee;">
+                <strong>{item.item_name}</strong><br>
+                <span style="color: #666; font-size: 12px;">Item ID: {item.item_id} | Sold by: {item.seller}</span>
+            </td>
+            <td style="padding: 10px; border-bottom: 1px solid #eee; text-align: center;">{item.qty}</td>
+            <td style="padding: 10px; border-bottom: 1px solid #eee; text-align: right;">${item.total_price}</td>
+        </tr>
+        """
+
+    html_content = f"""
+    <html>
+    <body style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <h2 style="color: #4f46e5;">DistributedStore</h2>
+        <p>Hello {payment_data['name']},</p>
+        <p>Thank you for your order from DistributedStore. Once your package ships, your seller will update the tracking status.</p>
+        <p>Your order confirmation is below.</p>
+        
+        <h3 style="border-bottom: 2px solid #333; padding-bottom: 5px;">Order # {order_id_display}</h3>
+        
+        <table width="100%" style="margin-bottom: 20px;">
+            <tr>
+                <td width="50%" valign="top">
+                    <strong>Shipping & Billing Address:</strong><br>
+                    {payment_data['name']}<br>
+                    {payment_data['street']}<br>
+                    {payment_data['city']}, {payment_data['state']} {payment_data['zip']}<br>
+                    T: {payment_data['phone']}
+                </td>
+                <td width="50%" valign="top">
+                    <strong>Payment Method:</strong><br>
+                    Credit Card ending in {payment_data['cc_number'][-4:]}<br><br>
+                    <strong>Shipping Method:</strong><br>
+                    Standard Distributed Shipping
+                </td>
+            </tr>
+        </table>
+
+        <h3 style="border-bottom: 2px solid #333; padding-bottom: 5px;">Items Ordered</h3>
+        <table width="100%" style="border-collapse: collapse; margin-bottom: 20px;">
+            {items_html}
+        </table>
+
+        <table width="100%" style="text-align: right;">
+            <tr><td>Subtotal:</td><td>${subtotal}</td></tr>
+            <tr><td style="color: green;">Discount Applied:</td><td style="color: green;">-${discount}</td></tr>
+            <tr><td>Tax (8%):</td><td>${tax}</td></tr>
+            <tr><td><strong>Total Billed:</strong></td><td><strong>${final_billed}</strong></td></tr>
+        </table>
+        
+        <p style="text-align: center; margin-top: 40px; font-size: 12px; color: #999;">
+            © 2026 DistributedStore. All Rights Reserved.
+        </p>
+    </body>
+    </html>
+    """
+
+    msg = EmailMessage()
+    msg['Subject'] = f'DistributedStore - New Order # {order_id_display}'
+    msg['From'] = SENDER_EMAIL
+    msg['To'] = to_email
+    msg.set_content("Please enable HTML to view this receipt.")
+    msg.add_alternative(html_content, subtype='html')
+
+    try:
+        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server.starttls()
+        server.login(SENDER_EMAIL, SENDER_PASSWORD)
+        server.send_message(msg)
+        server.quit()
+        print(f"✅ HTML RECEIPT SENT TO: {to_email}")
+    except Exception as e:
+        print(f"❌ Failed to send email: {e}")
+
 
 @app.route('/create_account', methods=['POST'])
 def create_account():
@@ -265,35 +355,33 @@ def manage_cart():
             else: 
                 enriched_cart.append({"id": item['id'], "name": "UNKNOWN", "qty": item['qty'], "price": 0, "item_total": 0, "discount_applied": 0})
                 
-        # --- NEW CODE: FETCH AVAILABLE PROMOS FOR THE CART ---
         suggested_promos = []
         try:
-            # 1. Find all unique sellers in the user's cart
             sellers_in_cart = set([item['seller'] for item in enriched_cart if 'seller' in item])
             
-            # 2. Fetch all promos for each of those sellers
             for seller in sellers_in_cart:
                 promos_resp = prod_stub.GetSellerPromos(ecommerce_pb2.UserRequest(query=seller))
                 
-                # 3. Check if any of the seller's promos actually apply to the items in the cart
                 for p in promos_resp.promos:
                     for item in enriched_cart:
                         if item.get('seller') == seller:
                             if p.target_type == 'ITEM' and p.target_val == item['id']:
                                 suggested_promos.append(f"Use code '{p.code}' for {p.discount_pct}% off {item['name']}!")
-                                break # Move to next promo
+                                break 
                             elif p.target_type == 'CATEGORY' and p.target_val == item['category']:
                                 suggested_promos.append(f"Use code '{p.code}' for {p.discount_pct}% off Category {p.target_val} items!")
-                                break # Move to next promo
+                                break
         except Exception as e:
             print(f"Promo fetch error: {e}")
 
+        tax = round(grand_total * 0.08, 2)
+        final_billed = round(grand_total + tax, 2)
+
         return jsonify({
-            "status": "SUCCESS", 
-            "cart": enriched_cart, 
+            "status": "SUCCESS", "cart": enriched_cart, 
             "grand_total": round(grand_total, 2), 
-            "promo_msg": promo_msg,
-            "suggested_promos": suggested_promos # Pass to React!
+            "tax": tax, "final_billed": final_billed, # NEW!
+            "promo_msg": promo_msg, "suggested_promos": suggested_promos
         })
     
     if request.method == 'POST': 
@@ -347,9 +435,36 @@ def get_orders():
     if not valid.success: return jsonify({"status": "FAIL", "message": "Login First"})
     
     resp = cust_stub.GetBuyerOrders(ecommerce_pb2.UserRequest(query=valid.username))
-    orders = [{"order_id": o.order_id,"item_id": o.item_id, "seller": o.seller, "item": o.item_name, "qty": o.qty, "total": o.total_price, "status": o.status} for o in resp.orders]
+    orders = [{"order_id": o.order_id, "item_id": o.item_id, "seller": o.seller, "buyer": o.buyer, "item": o.item_name, "qty": o.qty, "total": o.total_price, "status": o.status, "timestamp": o.timestamp} for o in resp.orders]
     
     return jsonify({"status": "SUCCESS", "orders": orders})
+
+
+@app.route('/profile', methods=['GET', 'POST'])
+def handle_profile():
+    sess_id = request.args.get('sess_id') or (request.json and request.json.get('sess_id'))
+    valid = cust_stub.ValidateSession(ecommerce_pb2.SessionRequest(sess_id=sess_id))
+    if not valid.success: return jsonify({"status": "FAIL", "message": "Login First"})
+
+    if request.method == 'GET':
+        user_data = cust_stub.GetUserData(ecommerce_pb2.UserRequest(query=valid.username))
+        if user_data.success:
+            return jsonify({
+                "status": "SUCCESS", 
+                "username": valid.username,
+                "email": user_data.email, 
+                "photo_url": user_data.photo_url
+            })
+        return jsonify({"status": "FAIL"})
+        
+    if request.method == 'POST':
+        data = request.json
+        resp = cust_stub.UpdateProfile(ecommerce_pb2.UpdateProfileRequest(
+            username=valid.username,
+            email=data.get('email', ''),
+            photo_url=data.get('photo_url', '')
+        ))
+        return jsonify({"status": "SUCCESS" if resp.success else "FAIL", "message": resp.message})
 
 @app.route('/purchase', methods=['POST'])
 def make_purchase():
@@ -398,12 +513,18 @@ def make_purchase():
                         discount_amount = (p_resp.price * (promo_pct / 100.0)) * item['qty']
                 
                 total_savings += discount_amount 
-                final_price = (p_resp.price * item['qty']) - discount_amount
                 
+                now_str = datetime.datetime.now().strftime("%b %d, %Y at %I:%M %p")
+
+                final_price = (p_resp.price * item['qty']) - discount_amount
+                item_tax = final_price * 0.08 
+                final_billed_item = final_price + item_tax 
+
                 order_items.append(ecommerce_pb2.Order(
-                    order_id=str(uuid.uuid4()), buyer=valid.username, seller=p_resp.seller,
-                    item_id=item['id'], item_name=p_resp.name, qty=item['qty'],
-                    total_price=round(final_price, 2), status="PROCESSING"
+                 order_id=str(uuid.uuid4()), buyer=valid.username, seller=p_resp.seller,
+                 item_id=item['id'], item_name=p_resp.name, qty=item['qty'],
+                 total_price=round(final_billed_item, 2), 
+                 status="PROCESSING", timestamp=now_str 
                 ))
             
             for item in cart:
@@ -411,6 +532,24 @@ def make_purchase():
             cust_stub.PlaceOrder(ecommerce_pb2.PlaceOrderRequest(buyer=valid.username, items=order_items))
             cust_stub.ClearCart(ecommerce_pb2.SessionRequest(sess_id=sess_id))
             cust_stub.SaveCart(ecommerce_pb2.SessionRequest(sess_id=sess_id))
+
+            user_data = cust_stub.GetUserData(ecommerce_pb2.UserRequest(query=valid.username))
+            if user_data.success and user_data.email:
+                cart_subtotal = round(sum(p_resp.price * item['qty'] for item in cart for p_resp in [prod_stub.GetItem(ecommerce_pb2.IDRequest(id=item['id']))] if p_resp.success), 2)
+                cart_discount = round(total_savings, 2)
+                
+                cart_tax = round((cart_subtotal - cart_discount) * 0.08, 2)
+                cart_final_billed = round((cart_subtotal - cart_discount) + cart_tax, 2)
+
+                send_order_confirmation(
+                    user_data.email, 
+                    order_items, 
+                    data, 
+                    cart_subtotal, 
+                    cart_discount, 
+                    cart_tax, 
+                    cart_final_billed
+                )
             
             success_msg = "Payment Approved & Orders Created!"
             if total_savings > 0:

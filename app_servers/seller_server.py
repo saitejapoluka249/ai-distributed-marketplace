@@ -5,6 +5,8 @@ import ecommerce_pb2_grpc
 import os
 from dotenv import load_dotenv
 from flask_cors import CORS
+import smtplib
+from email.message import EmailMessage
 
 load_dotenv()
 
@@ -26,6 +28,10 @@ cust_stub = ecommerce_pb2_grpc.CustomerServiceStub(cust_channel)
 prod_channel = grpc.insecure_channel(PRODUCT_DB_ADDR,options=channel_options)
 prod_stub = ecommerce_pb2_grpc.ProductServiceStub(prod_channel)
 
+
+SENDER_EMAIL = os.getenv("SENDER_EMAIL")
+SENDER_PASSWORD = os.getenv("SENDER_PASSWORD")
+
 def is_valid_price(p):
     try: return float(p) >= 0
     except: return False
@@ -40,6 +46,37 @@ def is_strong_password(password):
     if not any(c.islower() for c in password): return False, "Password needs at least one lowercase letter."
     if not any(c.isdigit() for c in password): return False, "Password needs at least one number."
     return True, ""
+
+def send_status_update_email(to_email, order_id, new_status):
+    if not to_email: 
+        return
+        
+    order_id_display = order_id[:8].upper()
+    
+    if new_status == 'SHIPPED':
+        subject = f"🚚 Your Order #{order_id_display} has Shipped!"
+        body = f"Great news! The seller has shipped your order.\n\nOrder ID: {order_id_display}\nStatus: SHIPPED\n\nLog into your DistributedStore dashboard to track its progress."
+    elif new_status == 'DELIVERED':
+        subject = f"📦 Your Order #{order_id_display} was Delivered!"
+        body = f"Your package has arrived!\n\nOrder ID: {order_id_display}\nStatus: DELIVERED\n\nPlease log into your DistributedStore dashboard to leave a review for the seller and the product!"
+    else:
+        return 
+
+    msg = EmailMessage()
+    msg.set_content(body)
+    msg['Subject'] = subject
+    msg['From'] = SENDER_EMAIL
+    msg['To'] = to_email
+
+    try:
+        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server.starttls()
+        server.login(SENDER_EMAIL, SENDER_PASSWORD)
+        server.send_message(msg)
+        server.quit()
+        print(f"✅ STATUS UPDATE EMAIL SENT TO: {to_email}")
+    except Exception as e:
+        print(f"❌ Failed to send email: {e}")
 
 @app.route('/create_account', methods=['POST'])
 def create_account():
@@ -129,7 +166,7 @@ def manage_orders():
     
     if request.method == 'GET':
         resp = cust_stub.GetSellerOrders(ecommerce_pb2.UserRequest(query=valid.username))
-        orders = [{"order_id": o.order_id, "buyer": o.buyer, "item": o.item_name, "qty": o.qty, "total": o.total_price, "status": o.status} for o in resp.orders]
+        orders = [{"order_id": o.order_id, "item_id": o.item_id, "seller": o.seller, "buyer": o.buyer, "item": o.item_name, "qty": o.qty, "total": o.total_price, "status": o.status, "timestamp": o.timestamp} for o in resp.orders]
         return jsonify({"status": "SUCCESS", "orders": orders})
         
     if request.method == 'PUT':
@@ -140,6 +177,12 @@ def manage_orders():
         resp = cust_stub.UpdateOrderStatus(ecommerce_pb2.OrderStatusRequest(order_id=data['order_id'], new_status=data['status']))
         
         if resp.success:
+            buyer_username = data.get('buyer')
+            if buyer_username:
+                user_data = cust_stub.GetUserData(ecommerce_pb2.UserRequest(query=buyer_username))
+                if user_data.success and user_data.email:
+                    send_status_update_email(user_data.email, data['order_id'], data['status'])
+            
             return jsonify({"status": "SUCCESS", "message": resp.message})
         else:
             return jsonify({"status": "FAIL", "message": resp.message})

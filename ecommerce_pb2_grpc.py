@@ -134,6 +134,11 @@ class CustomerServiceStub(object):
                 request_serializer=ecommerce__pb2.WishlistItemRequest.SerializeToString,
                 response_deserializer=ecommerce__pb2.ResponseMsg.FromString,
                 _registered_method=True)
+        self.UpdateProfile = channel.unary_unary(
+                '/ecommerce.CustomerService/UpdateProfile',
+                request_serializer=ecommerce__pb2.UpdateProfileRequest.SerializeToString,
+                response_deserializer=ecommerce__pb2.ResponseMsg.FromString,
+                _registered_method=True)
 
 
 class CustomerServiceServicer(object):
@@ -259,6 +264,12 @@ class CustomerServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def UpdateProfile(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_CustomerServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -360,6 +371,11 @@ def add_CustomerServiceServicer_to_server(servicer, server):
             'RemoveFromWishlist': grpc.unary_unary_rpc_method_handler(
                     servicer.RemoveFromWishlist,
                     request_deserializer=ecommerce__pb2.WishlistItemRequest.FromString,
+                    response_serializer=ecommerce__pb2.ResponseMsg.SerializeToString,
+            ),
+            'UpdateProfile': grpc.unary_unary_rpc_method_handler(
+                    servicer.UpdateProfile,
+                    request_deserializer=ecommerce__pb2.UpdateProfileRequest.FromString,
                     response_serializer=ecommerce__pb2.ResponseMsg.SerializeToString,
             ),
     }
@@ -902,6 +918,33 @@ class CustomerService(object):
             target,
             '/ecommerce.CustomerService/RemoveFromWishlist',
             ecommerce__pb2.WishlistItemRequest.SerializeToString,
+            ecommerce__pb2.ResponseMsg.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def UpdateProfile(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/ecommerce.CustomerService/UpdateProfile',
+            ecommerce__pb2.UpdateProfileRequest.SerializeToString,
             ecommerce__pb2.ResponseMsg.FromString,
             options,
             channel_credentials,

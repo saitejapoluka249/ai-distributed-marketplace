@@ -7,6 +7,7 @@ import Wishlist from './components/Wishlist';
 
 import SellerAuth from './components/seller/SellerAuth';
 import SellerLayout from './components/seller/SellerLayout';
+import Settings from './components/Settings';
 
 const BASE_URL = 'http://localhost:7003';
 
@@ -113,6 +114,13 @@ function App() {
                     <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd"></path></svg>
                     Wishlist
                   </button>
+                  <button 
+                    onClick={() => setCurrentView('settings')}
+                    className={`px-4 py-2 rounded-lg text-sm font-bold transition-all whitespace-nowrap flex items-center gap-1.5 ${currentView === 'settings' ? 'bg-white text-indigo-900 shadow-sm' : 'text-indigo-200 hover:text-white hover:bg-white/10'}`}
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                    Settings
+                  </button>
                 </div>
               </div>
 
@@ -147,14 +155,15 @@ function App() {
           
           <main className="max-w-7xl mx-auto p-4 sm:p-8 mt-4">
             <div className="mb-8">
-              <h2 className="text-3xl font-bold text-gray-900 tracking-tight">
+            <h2 className="text-3xl font-bold text-gray-900 tracking-tight">
                 {currentView === 'marketplace' ? 'Marketplace' : 
-                 currentView === 'orders' ? 'Purchase History' : 'My Wishlist'}
+                 currentView === 'orders' ? 'Purchase History' : 
+                 currentView === 'wishlist' ? 'My Wishlist' : 'Account Settings'}
               </h2>
               <p className="text-gray-500 mt-2">
                 {currentView === 'marketplace' ? 'Search and discover top-tier items from distributed sellers.' : 
                  currentView === 'orders' ? 'Track the status of your recent transactions.' : 
-                 'Items you have saved for later.'}
+                 currentView === 'wishlist' ? 'Items you have saved for later' : 'Account Settings'}
               </p>
             </div>
 
@@ -162,6 +171,7 @@ function App() {
             {currentView === 'marketplace' && <Dashboard sessionId={session} />}
             {currentView === 'orders' && <Orders sessionId={session} />}
             {currentView === 'wishlist' && <Wishlist sessionId={session} />}
+            {currentView === 'settings' && <Settings sessionId={session} />}
           </main>
 
           <Cart 

@@ -78,6 +78,7 @@ export default function Orders({ sessionId }) {
                     <span className="font-medium">Seller: {order.seller}</span>
                   </div>
                   <div className="mt-2 text-xs font-mono text-gray-400">ID: {order.order_id}</div>
+                  <div className="mt-2 text-xs font-mono text-gray-400">ID: {order.timestamp}</div>
                 </div>
               </div>
 

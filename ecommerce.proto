@@ -24,6 +24,7 @@ service CustomerService {
     rpc GetWishlist (SessionRequest) returns (WishlistResponse);
     rpc AddToWishlist (WishlistItemRequest) returns (ResponseMsg);
     rpc RemoveFromWishlist (WishlistItemRequest) returns (ResponseMsg);
+    rpc UpdateProfile (UpdateProfileRequest) returns (ResponseMsg);
 }
 
 service ProductService {
@@ -64,6 +65,7 @@ message Order {
     int32 qty = 6;
     double total_price = 7;
     string status = 8;
+    string timestamp = 9; // NEW: Track when the order was placed!
 }
 
 message OrderResponse {
@@ -89,7 +91,16 @@ message LoginResponse { bool success = 1; string message = 2; }
 message SessionRequest { string sess_id = 1; string username = 2; }
 message ValidateResponse { bool success = 1; string username = 2; }
 message UserRequest { string query = 1; }
-message UserResponse { bool success = 1; int32 id = 2; string role = 3; int32 fb_up = 4; int32 fb_down = 5; string purchase_history_json = 6; }
+message UserResponse { 
+    bool success = 1; 
+    int32 id = 2;
+    string role = 3; 
+    int32 fb_up = 4; 
+    int32 fb_down = 5; 
+    string purchase_history_json = 6;
+    string email = 7;      // NEW
+    string photo_url = 8;  // NEW
+}
 
 message RatingResponse {
     double avg_rating = 1;          
@@ -191,4 +202,9 @@ message PromoResponse {
 message PromoListResponse {
     bool success = 1;
     repeated PromoResponse promos = 2;
+}
+message UpdateProfileRequest {
+    string username = 1;
+    string email = 2;
+    string photo_url = 3; // Base64 string just like we did for items!
 }
