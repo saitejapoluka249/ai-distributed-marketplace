@@ -163,7 +163,7 @@ function App() {
               <p className="text-gray-500 mt-2">
                 {currentView === 'marketplace' ? 'Search and discover top-tier items from distributed sellers.' : 
                  currentView === 'orders' ? 'Track the status of your recent transactions.' : 
-                 currentView === 'wishlist' ? 'Items you have saved for later' : 'Account Settings'}
+                 currentView === 'wishlist' ? 'Items you have saved for later' : 'Manage your public profile, email preferences, and security.'}
               </p>
             </div>
 

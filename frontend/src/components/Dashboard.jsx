@@ -60,7 +60,12 @@ export default function Dashboard({ sessionId }) {
   };
 
   useEffect(() => {
-    fetchItems();
+    fetchItems(); 
+
+    const handleRefresh = () => fetchItems();
+    window.addEventListener('refreshMarketplace', handleRefresh);
+
+    return () => window.removeEventListener('refreshMarketplace', handleRefresh);
   }, []);
 
   const handleSearch = (e) => {

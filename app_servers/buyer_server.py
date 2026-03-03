@@ -432,12 +432,28 @@ def save_cart():
 def get_orders():
     sess_id = request.args.get('sess_id')
     valid = cust_stub.ValidateSession(ecommerce_pb2.SessionRequest(sess_id=sess_id))
-    if not valid.success: return jsonify({"status": "FAIL", "message": "Login First"})
-    
+    if not valid.success: return jsonify({"status": "FAIL"})
+
     resp = cust_stub.GetBuyerOrders(ecommerce_pb2.UserRequest(query=valid.username))
-    orders = [{"order_id": o.order_id, "item_id": o.item_id, "seller": o.seller, "buyer": o.buyer, "item": o.item_name, "qty": o.qty, "total": o.total_price, "status": o.status, "timestamp": o.timestamp} for o in resp.orders]
     
-    return jsonify({"status": "SUCCESS", "orders": orders})
+    enriched_orders = []
+    for o in resp.orders:
+        p_resp = prod_stub.GetItem(ecommerce_pb2.IDRequest(id=o.item_id))
+        img_url = p_resp.image_url if p_resp.success else None
+        
+        enriched_orders.append({
+            "order_id": o.order_id, 
+            "item_id": o.item_id, 
+            "seller": o.seller, 
+            "item": o.item_name, 
+            "qty": o.qty, 
+            "total": o.total_price, 
+            "status": o.status, 
+            "timestamp": o.timestamp,
+            "image_url": img_url # NEW: Pass the image to React!
+        })
+        
+    return jsonify({"status": "SUCCESS", "orders": enriched_orders})
 
 
 @app.route('/profile', methods=['GET', 'POST'])
@@ -557,7 +573,7 @@ def make_purchase():
             elif promo_code:
                 success_msg = f"Payment Approved. (Note: Promo '{promo_code}' was invalid or did not apply to your items)."
                 
-            return jsonify({"status": "SUCCESS", "message": success_msg})
+            return jsonify({"status": "SUCCESS", "message": success_msg,"order_id": order_items[0].order_id[:8].upper()})
         
         else:
             return jsonify({"status": "FAIL", "message": result})

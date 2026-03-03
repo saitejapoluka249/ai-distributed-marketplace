@@ -68,9 +68,15 @@ export default function Orders({ sessionId }) {
             <div className="flex flex-col sm:flex-row gap-6 items-start sm:items-center w-full">
               {/* Left side: Order Info */}
               <div className="flex items-center gap-5 flex-1 w-full">
-                <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-indigo-50 to-purple-50 flex items-center justify-center border border-indigo-100 shrink-0">
-                  <svg className="w-8 h-8 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path></svg>
-                </div>
+              <div className="w-16 h-16 shrink-0 bg-gray-100 rounded-xl flex items-center justify-center overflow-hidden border border-gray-200">
+                    {order.image_url ? (
+                      <img src={order.image_url} alt={order.item} className="w-full h-full object-cover" />
+                    ) : (
+                      <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
+                      </svg>
+                    )}
+                  </div>
                 <div className="flex-1">
                   <h4 className="text-lg font-bold text-gray-900">{order.item}</h4>
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 text-sm text-gray-500">

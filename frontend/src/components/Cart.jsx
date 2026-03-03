@@ -34,7 +34,6 @@ function MapPanner({ center }) {
 
 const BASE_URL = 'http://localhost:7003';
 
-
 export default function Cart({ isOpen, onClose, sessionId }) {
   const [cart, setCart] = useState([]);
   const [grandTotal, setGrandTotal] = useState(0);
@@ -48,11 +47,13 @@ export default function Cart({ isOpen, onClose, sessionId }) {
   const [mapCenter, setMapCenter] = useState([40.0150, -105.2705]);
   const [isLocating, setIsLocating] = useState(false);
   
+  const [orderComplete, setOrderComplete] = useState(false);
+  const [completedOrderId, setCompletedOrderId] = useState('');
   
   const [isCheckout, setIsCheckout] = useState(false);
   const [paymentData, setPaymentData] = useState({ 
     name: '', cc: '', exp: '', cvv: '', 
-    street: '', city: '', state: '', zip: '', phone: '' 
+    street: '', city: '', state: '', zip: '', phone: ''
   });
   const [checkoutMsg, setCheckoutMsg] = useState('');
 
@@ -64,10 +65,10 @@ export default function Cart({ isOpen, onClose, sessionId }) {
       if (data.status === 'SUCCESS') {
         setCart(data.cart);
         setGrandTotal(data.grand_total);
-        setTax(data.tax); // NEW
+        setTax(data.tax);
         setFinalBilled(data.final_billed);
         setPromoMsg(data.promo_msg || '');
-        setSuggestedPromos(data.suggested_promos || []); 
+        setSuggestedPromos(data.suggested_promos || []);
       }
     } catch (err) {
       console.error("Failed to fetch cart");
@@ -81,6 +82,7 @@ export default function Cart({ isOpen, onClose, sessionId }) {
       fetchCart(promoCode);
       setIsCheckout(false);
       setCheckoutMsg('');
+      setOrderComplete(false); 
     }
   }, [isOpen]);
 
@@ -139,9 +141,10 @@ export default function Cart({ isOpen, onClose, sessionId }) {
       const data = await response.json();
       
       if (data.status === 'SUCCESS') {
-        setCheckoutMsg(`🎉 ${data.message}`);
-        setCart([]);
-        setGrandTotal(0);
+        setCompletedOrderId(data.order_id || 'Generating...'); 
+        setOrderComplete(true);
+        fetchCart(); 
+        window.dispatchEvent(new Event('refreshMarketplace'));
       } else {
         setCheckoutMsg(`❌ Error: ${data.message}`);
       }
@@ -203,6 +206,7 @@ export default function Cart({ isOpen, onClose, sessionId }) {
             className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40"
           />
 
+          {/* Slide-out Drawer */}
           <motion.div 
             initial={{ x: '100%' }}
             animate={{ x: 0 }}
@@ -210,13 +214,13 @@ export default function Cart({ isOpen, onClose, sessionId }) {
             transition={{ type: 'spring', damping: 25, stiffness: 200 }}
             className="fixed top-0 right-0 h-full w-full max-w-md bg-white shadow-2xl z-50 flex flex-col"
           >
-      {/* Header */}
-      <div className="flex justify-between items-center p-6 border-b border-gray-100 bg-gray-50">
+            {/* Header */}
+            <div className="flex justify-between items-center p-6 border-b border-gray-100 bg-gray-50">
               <h2 className="text-2xl font-bold text-gray-900">
-                {isCheckout ? 'Secure Checkout' : 'Your Cart'}
+                {isCheckout && !orderComplete ? 'Secure Checkout' : 'Your Cart'}
               </h2>
               <div className="flex items-center gap-2">
-                {!isCheckout && cart.length > 0 && (
+                {!isCheckout && cart.length > 0 && !orderComplete && (
                   <button 
                     onClick={handleClearCart} 
                     className="text-xs font-bold text-red-600 hover:text-red-800 bg-red-50 px-3 py-1.5 rounded-lg transition-colors"
@@ -232,7 +236,75 @@ export default function Cart({ isOpen, onClose, sessionId }) {
 
             {/* Content Area */}
             <div className="flex-1 overflow-y-auto p-6">
-              {loading && !isCheckout ? (
+              
+              {/* === THE ANIMATED SUCCESS SCREEN === */}
+              {orderComplete ? (
+                <div className="h-full flex flex-col items-center justify-center text-center pb-20">
+                  <motion.div
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ type: "spring", stiffness: 200, damping: 20 }}
+                    className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center mb-6"
+                  >
+                    <motion.svg 
+                      className="w-12 h-12 text-green-600" 
+                      fill="none" 
+                      stroke="currentColor" 
+                      viewBox="0 0 24 24"
+                    >
+                      <motion.path 
+                        strokeLinecap="round" 
+                        strokeLinejoin="round" 
+                        strokeWidth="3" 
+                        d="M5 13l4 4L19 7"
+                        initial={{ pathLength: 0 }}
+                        animate={{ pathLength: 1 }}
+                        transition={{ duration: 0.6, delay: 0.2, ease: "easeOut" }}
+                      />
+                    </motion.svg>
+                  </motion.div>
+                  
+                  <motion.h2 
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.4 }}
+                    className="text-3xl font-black text-gray-900 mb-2"
+                  >
+                    Payment Successful!
+                  </motion.h2>
+                  
+                  <motion.p 
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.6 }}
+                    className="text-gray-500 mb-8"
+                  >
+                    Thank you for your purchase. Your order has been placed and a receipt has been sent to your email.
+                  </motion.p>
+
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.8 }}
+                    className="bg-white border border-gray-200 rounded-xl p-4 w-full mb-8 shadow-sm"
+                  >
+                    <p className="text-xs text-gray-400 font-bold uppercase tracking-wider mb-1">Order Reference</p>
+                    <p className="font-mono text-indigo-600 font-bold text-sm truncate">{completedOrderId}</p>
+                  </motion.div>
+
+                  <motion.button
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 1 }}
+                    onClick={onClose} // Just close the cart!
+                    className="w-full bg-gray-900 hover:bg-gray-800 text-white font-bold py-4 rounded-xl shadow-lg transition-colors"
+                  >
+                    Continue Shopping
+                  </motion.button>
+                </div>
+
+              /* === NORMAL CART / CHECKOUT UI === */
+              ) : loading && !isCheckout ? (
                 <div className="text-center text-gray-500 py-10">Loading cart...</div>
               ) : cart.length === 0 && !checkoutMsg ? (
                 <div className="text-center text-gray-500 py-10">Your cart is empty.</div>
@@ -259,43 +331,43 @@ export default function Cart({ isOpen, onClose, sessionId }) {
                     </div>
                   ))}
 
-                {/* Promo Code Section */}
-              <form onSubmit={handleApplyPromo} className="flex gap-2 pt-4 border-t border-gray-100">
-                <input 
-                  type="text" 
-                  placeholder="Promo Code" 
-                  value={promoCode}
-                  onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
-                  className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none uppercase"
-                />
-                <button type="submit" className="bg-gray-900 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-gray-800 transition">Apply</button>
-              </form>
-              {promoMsg && <p className={`text-sm font-bold ${promoMsg.includes('Invalid') ? 'text-red-500' : 'text-green-600'}`}>{promoMsg}</p>}
+                  {/* Promo Code Section */}
+                  <form onSubmit={handleApplyPromo} className="flex gap-2 pt-4 border-t border-gray-100">
+                    <input 
+                      type="text" 
+                      placeholder="Promo Code" 
+                      value={promoCode}
+                      onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
+                      className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none uppercase"
+                    />
+                    <button type="submit" className="bg-gray-900 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-gray-800 transition">Apply</button>
+                  </form>
+                  {promoMsg && <p className={`text-sm font-bold ${promoMsg.includes('Invalid') ? 'text-red-500' : 'text-green-600'}`}>{promoMsg}</p>}
 
-              {/* PROMO SUGGESTIONS BOX */}
-              {suggestedPromos && suggestedPromos.length > 0 && (
-                <div className="mt-4 bg-teal-50 border border-teal-100 rounded-xl p-4">
-                  <p className="text-xs font-bold text-teal-800 uppercase tracking-wider mb-2 flex items-center gap-1">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path></svg>
-                    Available Offers
-                  </p>
-                  <ul className="space-y-1">
-                    {suggestedPromos.map((msg, i) => (
-                      <li key={i} className="text-sm font-medium text-teal-700 flex items-start gap-2">
-                        <span className="text-teal-400 mt-0.5">•</span>
-                        {msg}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+                  {/* PROMO SUGGESTIONS BOX */}
+                  {suggestedPromos && suggestedPromos.length > 0 && (
+                    <div className="mt-4 bg-teal-50 border border-teal-100 rounded-xl p-4">
+                      <p className="text-xs font-bold text-teal-800 uppercase tracking-wider mb-2 flex items-center gap-1">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path></svg>
+                        Available Offers
+                      </p>
+                      <ul className="space-y-1">
+                        {suggestedPromos.map((msg, i) => (
+                          <li key={i} className="text-sm font-medium text-teal-700 flex items-start gap-2">
+                            <span className="text-teal-400 mt-0.5">•</span>
+                            {msg}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
               ) : (
                 /* EXPANDED CHECKOUT VIEW */
                 <form id="checkout-form" onSubmit={handlePurchase} className="space-y-6">
                   
-                 {/* Shipping Section */}
-                 <div>
+                  {/* Shipping Section */}
+                  <div>
                     <h3 className="font-bold text-gray-900 border-b border-gray-200 pb-2 mb-4">1. Shipping Address</h3>
                     
                     {/* THE INTERACTIVE MAP */}
@@ -382,10 +454,9 @@ export default function Cart({ isOpen, onClose, sessionId }) {
             </div>
 
             {/* Footer with Total and Action Button */}
-            {cart.length > 0 && !checkoutMsg && (
+            {!orderComplete && cart.length > 0 && !checkoutMsg && (
               <div className="p-6 border-t border-gray-100 bg-gray-50">
 
-                {/* NEW: Transparent Pricing Breakdown */}
                 <div className="space-y-2 mb-6">
                   <div className="flex justify-between text-gray-500 text-sm">
                     <span>Subtotal</span>
