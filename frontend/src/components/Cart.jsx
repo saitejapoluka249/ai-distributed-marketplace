@@ -58,6 +58,18 @@ export default function Cart({ isOpen, onClose, sessionId }) {
     street: '', city: '', state: '', zip: '', phone: ''
   });
   const [checkoutMsg, setCheckoutMsg] = useState('');
+  const resetCheckoutState = () => {
+    setPaymentData({ 
+      name: '', cc: '', exp: '', cvv: '', 
+      street: '', city: '', state: '', zip: '', phone: '' 
+    });
+    setPromoCode('');
+    setPromoMsg('');
+    setMapPosition(null);
+    setMapCenter([37.3382, -121.8863]); 
+    setIsCheckout(false); 
+    setCheckoutMsg('');
+  };
 
   // --- THE COMPLETE 50-STATE TAX ENGINE ---
   const STATE_TAX_RATES = {
@@ -164,7 +176,7 @@ export default function Cart({ isOpen, onClose, sessionId }) {
     setCheckoutMsg('');
     
     try {
-      // --- TWO-PASS GEOCODING ---
+      // --- BULLETPROOF TWO-PASS GEOCODING ---
       let finalLat = mapPosition ? mapPosition.lat : null;
       let finalLng = mapPosition ? mapPosition.lng : null;
 
@@ -233,14 +245,7 @@ export default function Cart({ isOpen, onClose, sessionId }) {
         setCompletedOrderId(data.order_id || 'Generating...'); 
         setOrderComplete(true);
         
-        setPromoCode('');
-        setPromoMsg('');
-        setPaymentData({ 
-          name: '', cc: '', exp: '', cvv: '', 
-          street: '', city: '', state: '', zip: '', phone: '' 
-        });
-        setMapPosition(null);
-        setMapCenter([37.3382, -121.8863]); 
+        resetCheckoutState();
 
         fetchCart(''); 
         window.dispatchEvent(new Event('refreshMarketplace')); 
@@ -305,7 +310,7 @@ export default function Cart({ isOpen, onClose, sessionId }) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            onClick={onClose}
+            onClick={() => { onClose(); resetCheckoutState(); }}
             className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40"
           />
 
@@ -331,7 +336,10 @@ export default function Cart({ isOpen, onClose, sessionId }) {
                     Clear Cart
                   </button>
                 )}
-                <button onClick={onClose} className="p-2 bg-white rounded-full hover:bg-gray-200 transition-colors shadow-sm ml-2">
+                <button 
+                  onClick={() => { onClose(); resetCheckoutState(); }} 
+                  className="p-2 bg-white rounded-full hover:bg-gray-200 transition-colors shadow-sm ml-2"
+                >
                   <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                 </button>
               </div>
@@ -399,7 +407,7 @@ export default function Cart({ isOpen, onClose, sessionId }) {
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: 1 }}
-                    onClick={onClose} // Just close the cart!
+                    onClick={onClose} 
                     className="w-full bg-gray-900 hover:bg-gray-800 text-white font-bold py-4 rounded-xl shadow-lg transition-colors"
                   >
                     Continue Shopping
@@ -545,6 +553,7 @@ export default function Cart({ isOpen, onClose, sessionId }) {
                               ))}
                             </select>
                           </div>
+
                           <div>
                             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Zip</label>
                             <input required type="text" value={paymentData.zip} 
@@ -590,7 +599,7 @@ export default function Cart({ isOpen, onClose, sessionId }) {
             {!orderComplete && cart.length > 0 && !checkoutMsg && (
               <div className="p-6 border-t border-gray-100 bg-gray-50">
 
-<div className="space-y-2 mb-6">
+                <div className="space-y-2 mb-6">
                   <div className="flex justify-between text-gray-500 text-sm">
                     <span>Subtotal</span>
                     <span>${parseFloat(grandTotal).toFixed(2)}</span>

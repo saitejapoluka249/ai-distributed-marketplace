@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import ItemModal from './ItemModal';
 
 const BASE_URL = 'http://localhost:7003';
@@ -22,26 +22,28 @@ export default function Dashboard({ sessionId }) {
   const [selectedItemId, setSelectedItemId] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // Default to '0' so it shows "All Categories" by default
   const [category, setCategory] = useState(0); 
   const [keywords, setKeywords] = useState('');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
 
-  const fetchItems = async (targetPage = 1, targetCategory = category) => {
+  // --- NEW: LIVE SEARCH STATE ---
+  const [suggestions, setSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+
+  const fetchItems = async (targetPage = 1, targetCategory = category, currentKeywords = keywords) => {
     setLoading(true);
     setError('');
     
     try {
       const response = await fetch(
-        `${BASE_URL}/search?category=${targetCategory}&keywords=${keywords}&page=${targetPage}&limit=8`
+        `${BASE_URL}/search?category=${targetCategory}&keywords=${currentKeywords}&page=${targetPage}&limit=8`
       );
       const data = await response.json();
 
       if (data.status === 'SUCCESS') {
         const parsedItems = data.items.map(itemStr => {
           const match = itemStr.match(/ID:\s*([\d\.]+)\s*\|\s*(.*?)\s*\|\s*\$([\d\.]+)\s*\|\s*Available:\s*(\d+)(?:\s*\|\s*IMG:\s*(.*))?/i);
-          
           if (match) {
             return {
               id: match[1],
@@ -68,17 +70,56 @@ export default function Dashboard({ sessionId }) {
   };
 
   useEffect(() => {
-    fetchItems(1, 0); // Load "All Categories" initially
+    fetchItems(1, 0, ''); 
 
-    const handleRefresh = () => fetchItems(page, category);
+    const handleRefresh = () => fetchItems(page, category, keywords);
     window.addEventListener('refreshMarketplace', handleRefresh);
 
     return () => window.removeEventListener('refreshMarketplace', handleRefresh);
   }, []);
 
+  // --- NEW: THE LIVE SEARCH DEBOUNCE EFFECT ---
+  useEffect(() => {
+    // Only search if they've typed at least 2 letters
+    if (keywords.trim().length < 2) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    const fetchLiveSuggestions = async () => {
+      try {
+        // Fetch a small limit (10) for the dropdown
+        const res = await fetch(`${BASE_URL}/search?category=${category}&keywords=${keywords}&page=1&limit=10`);
+        const data = await res.json();
+        
+        if (data.status === 'SUCCESS' && data.items.length > 0) {
+          const parsed = data.items.map(itemStr => {
+            const match = itemStr.match(/ID:\s*([\d\.]+)\s*\|\s*(.*?)\s*\|\s*\$([\d\.]+)/i);
+            return match ? { id: match[1], name: match[2].trim(), price: match[3] } : null;
+          }).filter(Boolean);
+          setSuggestions(parsed);
+          setShowSuggestions(true);
+        } else {
+          setSuggestions([]);
+          setShowSuggestions(false);
+        }
+      } catch (err) {
+        console.error("Live search failed", err);
+      }
+    };
+
+    const timeoutId = setTimeout(() => {
+      fetchLiveSuggestions();
+    }, 300); 
+
+    return () => clearTimeout(timeoutId);
+  }, [keywords, category]);
+
   const handleSearch = (e) => {
-    e.preventDefault();
-    fetchItems(1, category);
+    if (e) e.preventDefault();
+    setShowSuggestions(false); 
+    fetchItems(1, category, keywords);
   };
 
   const handleAddToCart = async (itemId) => {
@@ -102,6 +143,7 @@ export default function Dashboard({ sessionId }) {
   const openItemDetails = (id) => {
     setSelectedItemId(id);
     setIsModalOpen(true);
+    setShowSuggestions(false); 
   };
 
   const containerVariants = {
@@ -123,14 +165,14 @@ export default function Dashboard({ sessionId }) {
         animate={{ opacity: 1, y: 0 }}
         className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100"
       >
-        {/* NEW: Clickable Category Pills */}
+        {/* Clickable Category Pills */}
         <div className="flex overflow-x-auto gap-2 pb-4 mb-4 border-b border-gray-100 hide-scrollbar">
           {Object.entries(CATEGORY_MAP).map(([catId, catName]) => (
             <button
               key={catId}
               onClick={() => {
                 setCategory(Number(catId));
-                fetchItems(1, Number(catId)); // Instantly search when clicked!
+                fetchItems(1, Number(catId), keywords); 
               }}
               className={`whitespace-nowrap px-4 py-2 rounded-full text-sm font-bold transition-all ${
                 category === Number(catId) 
@@ -143,8 +185,8 @@ export default function Dashboard({ sessionId }) {
           ))}
         </div>
 
-        <form onSubmit={handleSearch} className="flex flex-col md:flex-row gap-4 mt-4">
-          <div className="flex-1">
+        <form onSubmit={handleSearch} className="flex flex-col md:flex-row gap-4 mt-4 relative">
+          <div className="flex-1 relative">
             <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Search Keywords</label>
             <input
               type="text"
@@ -152,7 +194,44 @@ export default function Dashboard({ sessionId }) {
               placeholder="e.g., Laptop, Mouse..."
               value={keywords}
               onChange={(e) => setKeywords(e.target.value)}
+              onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
+              onBlur={() => setTimeout(() => setShowSuggestions(false), 200)} 
             />
+
+            {/* --- NEW: ELASTIC-SEARCH STYLE DROPDOWN --- */}
+            <AnimatePresence>
+              {showSuggestions && (
+                <motion.div 
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="absolute z-50 w-full mt-2 bg-white border border-gray-200 shadow-2xl rounded-xl overflow-hidden"
+                >
+                  <ul className="max-h-60 overflow-y-auto">
+                    {suggestions.map(item => (
+                      <li 
+                        key={item.id}
+                        onMouseDown={() => openItemDetails(item.id)}
+                        className="px-4 py-3 border-b border-gray-50 hover:bg-indigo-50 cursor-pointer flex justify-between items-center transition-colors group"
+                      >
+                        <div className="flex flex-col">
+                          <span className="font-bold text-gray-800 group-hover:text-indigo-700">{item.name}</span>
+                          <span className="text-xs text-gray-400">ID: {item.id}</span>
+                        </div>
+                        <span className="font-black text-indigo-600">${item.price}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <div 
+                    onMouseDown={handleSearch} 
+                    className="px-4 py-2 bg-gray-50 text-xs font-bold text-center text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 cursor-pointer transition-colors"
+                  >
+                    View all results for "{keywords}"
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
           </div>
 
           <div className="flex items-end">
@@ -208,7 +287,6 @@ export default function Dashboard({ sessionId }) {
                       <svg className="w-12 h-12 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
                     )}
 
-                    {/* NEW: Translated Category Badge */}
                     <div className="absolute top-3 left-3 bg-white/90 backdrop-blur-sm px-2.5 py-1 rounded-lg shadow-sm border border-gray-100">
                       <span className="text-xs font-bold text-indigo-700 uppercase tracking-wider">
                         {CATEGORY_MAP[item.category] || "Other"}
@@ -263,7 +341,7 @@ export default function Dashboard({ sessionId }) {
             {totalPages > 1 && (
               <div className="flex justify-center items-center gap-4 mt-10">
                 <button 
-                  onClick={() => fetchItems(page - 1)}
+                  onClick={() => fetchItems(page - 1, category, keywords)}
                   disabled={page === 1}
                   className="px-4 py-2 rounded-lg bg-white border border-gray-200 text-gray-700 font-medium hover:bg-gray-50 disabled:opacity-50 transition-colors"
                 >
@@ -273,7 +351,7 @@ export default function Dashboard({ sessionId }) {
                   Page {page} of {totalPages}
                 </span>
                 <button 
-                  onClick={() => fetchItems(page + 1)}
+                  onClick={() => fetchItems(page + 1, category, keywords)}
                   disabled={page === totalPages}
                   className="px-4 py-2 rounded-lg bg-white border border-gray-200 text-gray-700 font-medium hover:bg-gray-50 disabled:opacity-50 transition-colors"
                 >
