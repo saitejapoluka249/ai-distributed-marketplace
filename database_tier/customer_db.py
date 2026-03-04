@@ -45,7 +45,8 @@ def init_db():
     cursor.execute('''CREATE TABLE IF NOT EXISTS orders (
             order_id TEXT PRIMARY KEY, buyer TEXT, seller TEXT, 
             item_id TEXT, item_name TEXT, qty INTEGER, 
-            total_price REAL, status TEXT, timestamp TEXT)''') # Added timestamp
+            total_price REAL, status TEXT, timestamp TEXT,
+            lat REAL, lng REAL)''') 
     conn.commit()
     conn.close()
 
@@ -113,27 +114,29 @@ class CustomerService(ecommerce_pb2_grpc.CustomerServiceServicer):
     def PlaceOrder(self, request, context):
         import time
         for item in request.items:
-            self._execute("INSERT INTO orders (order_id, buyer, seller, item_id, item_name, qty, total_price, status, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                          (item.order_id, item.buyer, item.seller, item.item_id, item.item_name, item.qty, item.total_price, item.status, item.timestamp), commit=True)
+            self._execute("INSERT INTO orders (order_id, buyer, seller, item_id, item_name, qty, total_price, status, timestamp, lat, lng) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                          (item.order_id, item.buyer, item.seller, item.item_id, item.item_name, item.qty, item.total_price, item.status, item.timestamp, item.lat, item.lng), commit=True)
         return ecommerce_pb2.ResponseMsg(success=True, message="Order Placed")
 
     def GetBuyerOrders(self, request, context):
-        rows = self._execute("SELECT order_id, buyer, seller, item_id, item_name, qty, total_price, status, timestamp FROM orders WHERE buyer = ?", (request.query,), fetch_all=True) # Change 'buyer = ?' to 'seller = ?' for GetSellerOrders
+        rows = self._execute("SELECT order_id, buyer, seller, item_id, item_name, qty, total_price, status, timestamp, lat, lng FROM orders WHERE buyer = ?", (request.query,), fetch_all=True) 
         
         orders = [ecommerce_pb2.Order(
             order_id=r[0], buyer=r[1], seller=r[2], item_id=r[3], 
             item_name=r[4], qty=r[5], total_price=r[6], status=r[7],
-            timestamp=r[8] if r[8] else "Unknown" # NEW
+            timestamp=r[8] if r[8] else "Unknown",
+            lat=r[9] if r[9] else 0.0, lng=r[10] if r[10] else 0.0 # NEW
         ) for r in rows]
         return ecommerce_pb2.OrderResponse(success=True, orders=orders)
 
     def GetSellerOrders(self, request, context):
-        rows = self._execute("SELECT order_id, buyer, seller, item_id, item_name, qty, total_price, status, timestamp FROM orders WHERE seller = ?", (request.query,), fetch_all=True) # Change 'buyer = ?' to 'seller = ?' for GetSellerOrders
+        rows = self._execute("SELECT order_id, buyer, seller, item_id, item_name, qty, total_price, status, timestamp, lat, lng FROM orders WHERE seller = ?", (request.query,), fetch_all=True) 
         
         orders = [ecommerce_pb2.Order(
             order_id=r[0], buyer=r[1], seller=r[2], item_id=r[3], 
             item_name=r[4], qty=r[5], total_price=r[6], status=r[7],
-            timestamp=r[8] if r[8] else "Unknown" # NEW
+            timestamp=r[8] if r[8] else "Unknown",
+            lat=r[9] if r[9] else 0.0, lng=r[10] if r[10] else 0.0 # NEW
         ) for r in rows]
         return ecommerce_pb2.OrderResponse(success=True, orders=orders)
 

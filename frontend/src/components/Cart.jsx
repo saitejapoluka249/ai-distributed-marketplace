@@ -121,6 +121,40 @@ export default function Cart({ isOpen, onClose, sessionId }) {
     setCheckoutMsg('');
     
     try {
+      // --- BULLETPROOF FORWARD GEOCODING ---
+      let finalLat = mapPosition ? mapPosition.lat : null;
+      let finalLng = mapPosition ? mapPosition.lng : null;
+
+      if (!finalLat || !finalLng) {
+        // 1. Smart Address Builder: Only add fields if the user actually typed in them!
+        const addressParts = [];
+        if (paymentData.street) addressParts.push(paymentData.street);
+        if (paymentData.city) addressParts.push(paymentData.city);
+        if (paymentData.state) addressParts.push(paymentData.state);
+        if (paymentData.zip) addressParts.push(paymentData.zip);
+        
+        const cleanAddressQuery = addressParts.join(', '); // Creates a perfect string like "Austin, TX"
+        
+        try {
+          // 2. Ask OpenStreetMap for the coordinates
+          const geoRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(cleanAddressQuery)}`);
+          const geoData = await geoRes.json();
+          
+          if (geoData && geoData.length > 0) {
+            finalLat = parseFloat(geoData[0].lat);
+            finalLng = parseFloat(geoData[0].lon);
+          } else {
+            console.warn("Could not find address, using fallback.");
+            finalLat = 40.0150; 
+            finalLng = -105.2705;
+          }
+        } catch (err) {
+          finalLat = 40.0150;
+          finalLng = -105.2705;
+        }
+      }
+      // -------------------------------------
+
       const response = await fetch(`${BASE_URL}/purchase`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -135,16 +169,21 @@ export default function Cart({ isOpen, onClose, sessionId }) {
           city: paymentData.city,
           state: paymentData.state,
           zip: paymentData.zip,
-          phone: paymentData.phone
+          phone: paymentData.phone,
+          
+          // Send the perfectly calculated GPS coordinates!
+          lat: finalLat,
+          lng: finalLng
         })
       });
+      
       const data = await response.json();
       
       if (data.status === 'SUCCESS') {
         setCompletedOrderId(data.order_id || 'Generating...'); 
         setOrderComplete(true);
         fetchCart(); 
-        window.dispatchEvent(new Event('refreshMarketplace'));
+        window.dispatchEvent(new Event('refreshMarketplace')); 
       } else {
         setCheckoutMsg(`❌ Error: ${data.message}`);
       }
@@ -405,21 +444,41 @@ export default function Cart({ isOpen, onClose, sessionId }) {
                       </div>
                       <div>
                         <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Street Address</label>
-                        <input required type="text" value={paymentData.street} onChange={e => setPaymentData({...paymentData, street: e.target.value})} className="w-full border border-gray-200 rounded-lg px-4 py-3 focus:ring-2 focus:ring-indigo-500 outline-none bg-white" placeholder="123 Main St, Apt 4B"/>
+                        <input required type="text" value={paymentData.street} 
+                          onChange={e => {
+                            setPaymentData({...paymentData, street: e.target.value});
+                            setMapPosition(null); // <-- NEW: Wipes map memory if they type!
+                          }} 
+                          className="w-full border border-gray-200 rounded-lg px-4 py-3 focus:ring-2 focus:ring-indigo-500 outline-none bg-white" placeholder="123 Main St, Apt 4B"/>
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <label className="block text-xs font-bold text-gray-500 uppercase mb-1">City</label>
-                          <input required type="text" value={paymentData.city} onChange={e => setPaymentData({...paymentData, city: e.target.value})} className="w-full border border-gray-200 rounded-lg px-4 py-3 focus:ring-2 focus:ring-indigo-500 outline-none bg-white" placeholder="Enter city"/>
+                          <input required type="text" value={paymentData.city} 
+                            onChange={e => {
+                              setPaymentData({...paymentData, city: e.target.value});
+                              setMapPosition(null); // <-- NEW
+                            }} 
+                            className="w-full border border-gray-200 rounded-lg px-4 py-3 focus:ring-2 focus:ring-indigo-500 outline-none bg-white" placeholder="Enter city"/>
                         </div>
                         <div className="grid grid-cols-2 gap-2">
                           <div>
                             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">State</label>
-                            <input required type="text" value={paymentData.state} onChange={e => setPaymentData({...paymentData, state: e.target.value})} className="w-full border border-gray-200 rounded-lg px-4 py-3 focus:ring-2 focus:ring-indigo-500 outline-none bg-white" placeholder="e.g. CO"/>
+                            <input required type="text" value={paymentData.state} 
+                              onChange={e => {
+                                setPaymentData({...paymentData, state: e.target.value});
+                                setMapPosition(null); // <-- NEW
+                              }} 
+                              className="w-full border border-gray-200 rounded-lg px-4 py-3 focus:ring-2 focus:ring-indigo-500 outline-none bg-white" placeholder="e.g. CO"/>
                           </div>
                           <div>
                             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Zip</label>
-                            <input required type="text" value={paymentData.zip} onChange={e => setPaymentData({...paymentData, zip: e.target.value})} className="w-full border border-gray-200 rounded-lg px-4 py-3 focus:ring-2 focus:ring-indigo-500 outline-none bg-white" placeholder="Zip Code"/>
+                            <input required type="text" value={paymentData.zip} 
+                              onChange={e => {
+                                setPaymentData({...paymentData, zip: e.target.value});
+                                setMapPosition(null); // <-- NEW
+                              }} 
+                              className="w-full border border-gray-200 rounded-lg px-4 py-3 focus:ring-2 focus:ring-indigo-500 outline-none bg-white" placeholder="Zip Code"/>
                           </div>
                         </div>
                       </div>

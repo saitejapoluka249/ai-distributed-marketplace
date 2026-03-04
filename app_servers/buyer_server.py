@@ -442,15 +442,10 @@ def get_orders():
         img_url = p_resp.image_url if p_resp.success else None
         
         enriched_orders.append({
-            "order_id": o.order_id, 
-            "item_id": o.item_id, 
-            "seller": o.seller, 
-            "item": o.item_name, 
-            "qty": o.qty, 
-            "total": o.total_price, 
-            "status": o.status, 
-            "timestamp": o.timestamp,
-            "image_url": img_url # NEW: Pass the image to React!
+            "order_id": o.order_id, "item_id": o.item_id, "seller": o.seller, 
+            "item": o.item_name, "qty": o.qty, "total": o.total_price, 
+            "status": o.status, "timestamp": o.timestamp, "image_url": img_url,
+            "lat": o.lat, "lng": o.lng # NEW: Send to React!
         })
         
     return jsonify({"status": "SUCCESS", "orders": enriched_orders})
@@ -537,10 +532,12 @@ def make_purchase():
                 final_billed_item = final_price + item_tax 
 
                 order_items.append(ecommerce_pb2.Order(
-                 order_id=str(uuid.uuid4()), buyer=valid.username, seller=p_resp.seller,
-                 item_id=item['id'], item_name=p_resp.name, qty=item['qty'],
-                 total_price=round(final_billed_item, 2), 
-                 status="PROCESSING", timestamp=now_str 
+                    order_id=str(uuid.uuid4()), buyer=valid.username, seller=p_resp.seller,
+                    item_id=item['id'], item_name=p_resp.name, qty=item['qty'],
+                    total_price=round(final_billed_item, 2),
+                    status="PROCESSING", timestamp=now_str,
+                    lat=float(data.get('lat', 40.0150)), 
+                    lng=float(data.get('lng', -105.2705))
                 ))
             
             for item in cart:

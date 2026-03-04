@@ -65,8 +65,9 @@ message Order {
     int32 qty = 6;
     double total_price = 7;
     string status = 8;
-    string timestamp = 9; // NEW: Track when the order was placed!
-}
+    string timestamp = 9;
+    double lat = 10; 
+    double lng = 11; 
 
 message OrderResponse {
     bool success = 1;
