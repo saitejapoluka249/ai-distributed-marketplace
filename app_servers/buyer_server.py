@@ -106,7 +106,7 @@ def send_order_confirmation(to_email, order_items, payment_data, subtotal, disco
         <table width="100%" style="text-align: right;">
             <tr><td>Subtotal:</td><td>${subtotal}</td></tr>
             <tr><td style="color: green;">Discount Applied:</td><td style="color: green;">-${discount}</td></tr>
-            <tr><td>Tax (8%):</td><td>${tax}</td></tr>
+            <tr><td>Tax:</td><td>${tax}</td></tr>
             <tr><td><strong>Total Billed:</strong></td><td><strong>${final_billed}</strong></td></tr>
         </table>
         
@@ -203,7 +203,7 @@ def get_item():
             "rating": round(resp.avg_rating, 1),
             "reviews": reviews,                 
             "quantity": resp.quantity, "seller": resp.seller,
-            "image_url": resp.image_url # ADDED THIS LINE
+            "image_url": resp.image_url
         })
     return jsonify({"status": "FAIL", "message": "Item not found"})
 
@@ -373,14 +373,13 @@ def manage_cart():
                                 break
         except Exception as e:
             print(f"Promo fetch error: {e}")
-
-        tax = round(grand_total * 0.08, 2)
-        final_billed = round(grand_total + tax, 2)
+        tax = 0.0
+        final_billed = round(grand_total, 2)
 
         return jsonify({
             "status": "SUCCESS", "cart": enriched_cart, 
             "grand_total": round(grand_total, 2), 
-            "tax": tax, "final_billed": final_billed, # NEW!
+            "tax": tax, "final_billed": final_billed, 
             "promo_msg": promo_msg, "suggested_promos": suggested_promos
         })
     
@@ -445,7 +444,7 @@ def get_orders():
             "order_id": o.order_id, "item_id": o.item_id, "seller": o.seller, 
             "item": o.item_name, "qty": o.qty, "total": o.total_price, 
             "status": o.status, "timestamp": o.timestamp, "image_url": img_url,
-            "lat": o.lat, "lng": o.lng # NEW: Send to React!
+            "lat": o.lat, "lng": o.lng 
         })
         
     return jsonify({"status": "SUCCESS", "orders": enriched_orders})
@@ -483,7 +482,6 @@ def make_purchase():
     sess_id = data.get('sess_id')
     
     cart_resp = cust_stub.GetCart(ecommerce_pb2.SessionRequest(sess_id=sess_id))
-
     cart_list = json.loads(cart_resp.cart_json)
     
     if not cart_list:  
@@ -508,6 +506,25 @@ def make_purchase():
                 if pr_resp.success:
                     promo_type, promo_val, promo_pct, promo_seller = pr_resp.target_type, pr_resp.target_val, pr_resp.discount_pct, pr_resp.seller
 
+            # --- THE COMPLETE 50-STATE TAX ENGINE IN PYTHON ---
+            STATE_TAX_RATES = {
+                'AL': 0.0400, 'AK': 0.0000, 'AZ': 0.0560, 'AR': 0.0650, 'CA': 0.0725, 
+                'CO': 0.0290, 'CT': 0.0635, 'DE': 0.0000, 'FL': 0.0600, 'GA': 0.0400, 
+                'HI': 0.0400, 'ID': 0.0600, 'IL': 0.0625, 'IN': 0.0700, 'IA': 0.0600, 
+                'KS': 0.0650, 'KY': 0.0600, 'LA': 0.0445, 'ME': 0.0550, 'MD': 0.0600, 
+                'MA': 0.0625, 'MI': 0.0600, 'MN': 0.0688, 'MS': 0.0700, 'MO': 0.0423, 
+                'MT': 0.0000, 'NE': 0.0550, 'NV': 0.0685, 'NH': 0.0000, 'NJ': 0.0663, 
+                'NM': 0.0513, 'NY': 0.0400, 'NC': 0.0475, 'ND': 0.0500, 'OH': 0.0575, 
+                'OK': 0.0450, 'OR': 0.0000, 'PA': 0.0600, 'RI': 0.0700, 'SC': 0.0600, 
+                'SD': 0.0450, 'TN': 0.0700, 'TX': 0.0625, 'UT': 0.0610, 'VT': 0.0600, 
+                'VA': 0.0530, 'WA': 0.0650, 'WV': 0.0600, 'WI': 0.0500, 'WY': 0.0400,
+                'DC': 0.0600
+            }
+            
+            user_state = data.get('state', '').strip().upper()
+            # Default to 0.0 if the state is somehow missing, so it aligns with frontend math!
+            tax_rate = STATE_TAX_RATES.get(user_state, 0.0) 
+            
             order_items = []
             total_savings = 0.0 
             
@@ -528,7 +545,8 @@ def make_purchase():
                 now_str = datetime.datetime.now().strftime("%b %d, %Y at %I:%M %p")
 
                 final_price = (p_resp.price * item['qty']) - discount_amount
-                item_tax = final_price * 0.08 
+                
+                item_tax = final_price * tax_rate 
                 final_billed_item = final_price + item_tax 
 
                 order_items.append(ecommerce_pb2.Order(
@@ -536,8 +554,8 @@ def make_purchase():
                     item_id=item['id'], item_name=p_resp.name, qty=item['qty'],
                     total_price=round(final_billed_item, 2),
                     status="PROCESSING", timestamp=now_str,
-                    lat=float(data.get('lat', 37.3382) or 37.3382), 
-                    lng=float(data.get('lng', -121.8863) or -121.8863)
+                    lat=float(data.get('lat', 37.3382)), 
+                    lng=float(data.get('lng', -121.8863)) 
                 ))
             
             for item in cart:
@@ -551,7 +569,7 @@ def make_purchase():
                 cart_subtotal = round(sum(p_resp.price * item['qty'] for item in cart for p_resp in [prod_stub.GetItem(ecommerce_pb2.IDRequest(id=item['id']))] if p_resp.success), 2)
                 cart_discount = round(total_savings, 2)
                 
-                cart_tax = round((cart_subtotal - cart_discount) * 0.08, 2)
+                cart_tax = round((cart_subtotal - cart_discount) * tax_rate, 2)
                 cart_final_billed = round((cart_subtotal - cart_discount) + cart_tax, 2)
 
                 send_order_confirmation(

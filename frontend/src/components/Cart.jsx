@@ -43,8 +43,10 @@ export default function Cart({ isOpen, onClose, sessionId }) {
   const [suggestedPromos, setSuggestedPromos] = useState([]); 
   const [tax, setTax] = useState(0);
   const [finalBilled, setFinalBilled] = useState(0);
+  
+  // DEFAULT TO SAN JOSE, CA
   const [mapPosition, setMapPosition] = useState(null);
-  const [mapCenter, setMapCenter] = useState([37.3382, -121.8863]);
+  const [mapCenter, setMapCenter] = useState([37.3382, -121.8863]); 
   const [isLocating, setIsLocating] = useState(false);
   
   const [orderComplete, setOrderComplete] = useState(false);
@@ -56,6 +58,47 @@ export default function Cart({ isOpen, onClose, sessionId }) {
     street: '', city: '', state: '', zip: '', phone: ''
   });
   const [checkoutMsg, setCheckoutMsg] = useState('');
+
+  // --- THE COMPLETE 50-STATE TAX ENGINE ---
+  const STATE_TAX_RATES = {
+    'AL': 0.0400, 'AK': 0.0000, 'AZ': 0.0560, 'AR': 0.0650, 'CA': 0.0725, 
+    'CO': 0.0290, 'CT': 0.0635, 'DE': 0.0000, 'FL': 0.0600, 'GA': 0.0400, 
+    'HI': 0.0400, 'ID': 0.0600, 'IL': 0.0625, 'IN': 0.0700, 'IA': 0.0600, 
+    'KS': 0.0650, 'KY': 0.0600, 'LA': 0.0445, 'ME': 0.0550, 'MD': 0.0600, 
+    'MA': 0.0625, 'MI': 0.0600, 'MN': 0.0688, 'MS': 0.0700, 'MO': 0.0423, 
+    'MT': 0.0000, 'NE': 0.0550, 'NV': 0.0685, 'NH': 0.0000, 'NJ': 0.0663, 
+    'NM': 0.0513, 'NY': 0.0400, 'NC': 0.0475, 'ND': 0.0500, 'OH': 0.0575, 
+    'OK': 0.0450, 'OR': 0.0000, 'PA': 0.0600, 'RI': 0.0700, 'SC': 0.0600, 
+    'SD': 0.0450, 'TN': 0.0700, 'TX': 0.0625, 'UT': 0.0610, 'VT': 0.0600, 
+    'VA': 0.0530, 'WA': 0.0650, 'WV': 0.0600, 'WI': 0.0500, 'WY': 0.0400,
+    'DC': 0.0600
+  };
+
+  // --- REVERSE MAPPER (Turns "Texas" into "TX") ---
+  const STATE_NAME_TO_CODE = {
+    "Alabama": "AL", "Alaska": "AK", "Arizona": "AZ", "Arkansas": "AR", "California": "CA",
+    "Colorado": "CO", "Connecticut": "CT", "Delaware": "DE", "Florida": "FL", "Georgia": "GA",
+    "Hawaii": "HI", "Idaho": "ID", "Illinois": "IL", "Indiana": "IN", "Iowa": "IA",
+    "Kansas": "KS", "Kentucky": "KY", "Louisiana": "LA", "Maine": "ME", "Maryland": "MD",
+    "Massachusetts": "MA", "Michigan": "MI", "Minnesota": "MN", "Mississippi": "MS",
+    "Missouri": "MO", "Montana": "MT", "Nebraska": "NE", "Nevada": "NV", "New Hampshire": "NH",
+    "New Jersey": "NJ", "New Mexico": "NM", "New York": "NY", "North Carolina": "NC",
+    "North Dakota": "ND", "Ohio": "OH", "Oklahoma": "OK", "Oregon": "OR", "Pennsylvania": "PA",
+    "Rhode Island": "RI", "South Carolina": "SC", "South Dakota": "SD", "Tennessee": "TN",
+    "Texas": "TX", "Utah": "UT", "Vermont": "VT", "Virginia": "VA", "Washington": "WA",
+    "West Virginia": "WV", "Wisconsin": "WI", "Wyoming": "WY", "District of Columbia": "DC"
+  };
+
+  // --- DYNAMIC LIVE TAX MATH ---
+  const currentStateCode = paymentData.state.trim().toUpperCase();
+  
+  // Check if they actually selected a real state from the dropdown yet
+  const hasValidState = currentStateCode && STATE_TAX_RATES[currentStateCode] !== undefined;
+  
+  // Tax is strictly 0 until they select a real state!
+  const currentTaxRate = hasValidState ? STATE_TAX_RATES[currentStateCode] : 0; 
+  const liveTaxAmount = (grandTotal * currentTaxRate).toFixed(2);
+  const liveFinalBilled = (parseFloat(grandTotal) + parseFloat(liveTaxAmount)).toFixed(2);
 
   const fetchCart = async (promo = '') => {
     setLoading(true);
@@ -121,12 +164,11 @@ export default function Cart({ isOpen, onClose, sessionId }) {
     setCheckoutMsg('');
     
     try {
-      // --- THE TWO-PASS GEOCODING SYSTEM ---
+      // --- TWO-PASS GEOCODING ---
       let finalLat = mapPosition ? mapPosition.lat : null;
       let finalLng = mapPosition ? mapPosition.lng : null;
 
       if (!finalLat || !finalLng) {
-        // Pass 1: Try the exact full address (Street, City, State, Zip)
         const fullParts = [];
         if (paymentData.street) fullParts.push(paymentData.street);
         if (paymentData.city) fullParts.push(paymentData.city);
@@ -141,7 +183,6 @@ export default function Cart({ isOpen, onClose, sessionId }) {
             finalLat = parseFloat(fullData[0].lat);
             finalLng = parseFloat(fullData[0].lon);
           } else {
-            // Pass 2: The street was fake! Try just the City and State!
             console.warn("Exact street not found, falling back to City/State level...");
             const cityStateParts = [];
             if (paymentData.city) cityStateParts.push(paymentData.city);
@@ -154,7 +195,7 @@ export default function Cart({ isOpen, onClose, sessionId }) {
               finalLat = parseFloat(cityStateData[0].lat);
               finalLng = parseFloat(cityStateData[0].lon);
             } else {
-              // Absolute fallback if everything is blank
+              // San Jose Fallback
               finalLat = 37.3382; 
               finalLng = -121.8863;
             }
@@ -181,8 +222,6 @@ export default function Cart({ isOpen, onClose, sessionId }) {
           state: paymentData.state,
           zip: paymentData.zip,
           phone: paymentData.phone,
-          
-          // Send the perfectly calculated GPS coordinates!
           lat: finalLat,
           lng: finalLng
         })
@@ -193,7 +232,17 @@ export default function Cart({ isOpen, onClose, sessionId }) {
       if (data.status === 'SUCCESS') {
         setCompletedOrderId(data.order_id || 'Generating...'); 
         setOrderComplete(true);
-        fetchCart(); 
+        
+        setPromoCode('');
+        setPromoMsg('');
+        setPaymentData({ 
+          name: '', cc: '', exp: '', cvv: '', 
+          street: '', city: '', state: '', zip: '', phone: '' 
+        });
+        setMapPosition(null);
+        setMapCenter([37.3382, -121.8863]); 
+
+        fetchCart(''); 
         window.dispatchEvent(new Event('refreshMarketplace')); 
       } else {
         setCheckoutMsg(`❌ Error: ${data.message}`);
@@ -213,12 +262,16 @@ export default function Cart({ isOpen, onClose, sessionId }) {
       if (data.address) {
         const road = data.address.road || '';
         const houseNumber = data.address.house_number || '';
+        const rawState = data.address.state || '';
+        
+        // Translates full state name from map to 2-letter code
+        const mappedStateCode = STATE_NAME_TO_CODE[rawState] || rawState.substring(0, 2).toUpperCase();
         
         setPaymentData(prev => ({
           ...prev,
           street: `${houseNumber} ${road}`.trim(),
           city: data.address.city || data.address.town || data.address.village || '',
-          state: data.address.state || '',
+          state: mappedStateCode,
           zip: data.address.postcode || ''
         }));
       }
@@ -458,7 +511,7 @@ export default function Cart({ isOpen, onClose, sessionId }) {
                         <input required type="text" value={paymentData.street} 
                           onChange={e => {
                             setPaymentData({...paymentData, street: e.target.value});
-                            setMapPosition(null); // <-- NEW: Wipes map memory if they type!
+                            setMapPosition(null); 
                           }} 
                           className="w-full border border-gray-200 rounded-lg px-4 py-3 focus:ring-2 focus:ring-indigo-500 outline-none bg-white" placeholder="123 Main St, Apt 4B"/>
                       </div>
@@ -468,26 +521,36 @@ export default function Cart({ isOpen, onClose, sessionId }) {
                           <input required type="text" value={paymentData.city} 
                             onChange={e => {
                               setPaymentData({...paymentData, city: e.target.value});
-                              setMapPosition(null); // <-- NEW
+                              setMapPosition(null); 
                             }} 
                             className="w-full border border-gray-200 rounded-lg px-4 py-3 focus:ring-2 focus:ring-indigo-500 outline-none bg-white" placeholder="Enter city"/>
                         </div>
                         <div className="grid grid-cols-2 gap-2">
+                          
+                          {/* THE NEW STATE DROPDOWN MENU */}
                           <div>
                             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">State</label>
-                            <input required type="text" value={paymentData.state} 
+                            <select 
+                              required 
+                              value={paymentData.state} 
                               onChange={e => {
                                 setPaymentData({...paymentData, state: e.target.value});
-                                setMapPosition(null); // <-- NEW
+                                setMapPosition(null); 
                               }} 
-                              className="w-full border border-gray-200 rounded-lg px-4 py-3 focus:ring-2 focus:ring-indigo-500 outline-none bg-white" placeholder="e.g. CO"/>
+                              className="w-full border border-gray-200 rounded-lg px-4 py-3 focus:ring-2 focus:ring-indigo-500 outline-none bg-white appearance-none cursor-pointer"
+                            >
+                              <option value="" disabled>Select State</option>
+                              {Object.entries(STATE_NAME_TO_CODE).map(([fullName, code]) => (
+                                <option key={code} value={code}>{code} - {fullName}</option>
+                              ))}
+                            </select>
                           </div>
                           <div>
                             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Zip</label>
                             <input required type="text" value={paymentData.zip} 
                               onChange={e => {
                                 setPaymentData({...paymentData, zip: e.target.value});
-                                setMapPosition(null); // <-- NEW
+                                setMapPosition(null); 
                               }} 
                               className="w-full border border-gray-200 rounded-lg px-4 py-3 focus:ring-2 focus:ring-indigo-500 outline-none bg-white" placeholder="Zip Code"/>
                           </div>
@@ -523,22 +586,36 @@ export default function Cart({ isOpen, onClose, sessionId }) {
               )}
             </div>
 
-            {/* Footer with Total and Action Button */}
+            {/* THE NEW DYNAMIC TAX FOOTER */}
             {!orderComplete && cart.length > 0 && !checkoutMsg && (
               <div className="p-6 border-t border-gray-100 bg-gray-50">
 
-                <div className="space-y-2 mb-6">
+<div className="space-y-2 mb-6">
                   <div className="flex justify-between text-gray-500 text-sm">
                     <span>Subtotal</span>
-                    <span>${grandTotal}</span>
+                    <span>${parseFloat(grandTotal).toFixed(2)}</span>
                   </div>
-                  <div className="flex justify-between text-gray-500 text-sm">
-                    <span>Estimated Tax (8%)</span>
-                    <span>${tax}</span>
+                  
+                  <div className="flex justify-between text-gray-500 text-sm items-center">
+                    <span className="flex items-center gap-1">
+                      {hasValidState ? `State Tax (${currentStateCode})` : 'Tax'}
+                      {hasValidState && (
+                        <span className="bg-indigo-100 text-indigo-700 text-[10px] px-1.5 py-0.5 rounded font-bold">
+                          {(currentTaxRate * 100).toFixed(2)}%
+                        </span>
+                      )}
+                    </span>
+                    {/* Shows "Calculated at checkout" until they pick a state! */}
+                    <span className={hasValidState ? 'text-gray-900' : 'text-gray-400 italic'}>
+                      {hasValidState ? `$${liveTaxAmount}` : 'Calculated at checkout'}
+                    </span>
                   </div>
+
                   <div className="flex justify-between items-center pt-2 border-t border-gray-200 mt-2">
-                    <span className="text-gray-900 font-bold">Total Billed</span>
-                    <span className="text-3xl font-black text-gray-900">${finalBilled}</span>
+                    <span className="text-gray-900 font-bold">
+                      Total {hasValidState ? 'Billed' : 'Estimated'}
+                    </span>
+                    <span className="text-3xl font-black text-gray-900">${liveFinalBilled}</span>
                   </div>
                 </div>
 
@@ -548,7 +625,7 @@ export default function Cart({ isOpen, onClose, sessionId }) {
                   </button>
                 ) : (
                   <button form="checkout-form" type="submit" disabled={loading} className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-4 rounded-xl shadow-lg transition-colors flex justify-center items-center gap-2">
-                    {loading ? 'Processing...' : `Pay $${finalBilled}`}
+                    {loading ? 'Processing...' : `Pay $${liveFinalBilled}`}
                   </button>
                 )}
               </div>
