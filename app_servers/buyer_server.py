@@ -536,8 +536,8 @@ def make_purchase():
                     item_id=item['id'], item_name=p_resp.name, qty=item['qty'],
                     total_price=round(final_billed_item, 2),
                     status="PROCESSING", timestamp=now_str,
-                    lat=float(data.get('lat', 40.0150)), 
-                    lng=float(data.get('lng', -105.2705))
+                    lat=float(data.get('lat', 37.3382) or 37.3382), 
+                    lng=float(data.get('lng', -121.8863) or -121.8863)
                 ))
             
             for item in cart:

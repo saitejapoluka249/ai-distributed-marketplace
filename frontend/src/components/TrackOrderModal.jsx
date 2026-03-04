@@ -45,8 +45,8 @@ function RouteFitter({ bounds }) {
 export default function TrackOrderModal({ isOpen, onClose, order }) {
   if (!isOpen || !order) return null;
 
-  // The Warehouse is in Boulder, CO
-  const warehouseLocation = [40.0150, -105.2705]; 
+  // The Warehouse is in San Jose, CA
+  const warehouseLocation = [37.3382, -121.8863];
   
   // The REAL destination from the database (Fallback to Denver if missing)
   const destinationLocation = [order.lat || 39.7392, order.lng || -104.9903]; 

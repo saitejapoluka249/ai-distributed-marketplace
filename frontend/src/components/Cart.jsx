@@ -44,7 +44,7 @@ export default function Cart({ isOpen, onClose, sessionId }) {
   const [tax, setTax] = useState(0);
   const [finalBilled, setFinalBilled] = useState(0);
   const [mapPosition, setMapPosition] = useState(null);
-  const [mapCenter, setMapCenter] = useState([40.0150, -105.2705]);
+  const [mapCenter, setMapCenter] = useState([37.3382, -121.8863]);
   const [isLocating, setIsLocating] = useState(false);
   
   const [orderComplete, setOrderComplete] = useState(false);
@@ -121,36 +121,47 @@ export default function Cart({ isOpen, onClose, sessionId }) {
     setCheckoutMsg('');
     
     try {
-      // --- BULLETPROOF FORWARD GEOCODING ---
+      // --- THE TWO-PASS GEOCODING SYSTEM ---
       let finalLat = mapPosition ? mapPosition.lat : null;
       let finalLng = mapPosition ? mapPosition.lng : null;
 
       if (!finalLat || !finalLng) {
-        // 1. Smart Address Builder: Only add fields if the user actually typed in them!
-        const addressParts = [];
-        if (paymentData.street) addressParts.push(paymentData.street);
-        if (paymentData.city) addressParts.push(paymentData.city);
-        if (paymentData.state) addressParts.push(paymentData.state);
-        if (paymentData.zip) addressParts.push(paymentData.zip);
-        
-        const cleanAddressQuery = addressParts.join(', '); // Creates a perfect string like "Austin, TX"
+        // Pass 1: Try the exact full address (Street, City, State, Zip)
+        const fullParts = [];
+        if (paymentData.street) fullParts.push(paymentData.street);
+        if (paymentData.city) fullParts.push(paymentData.city);
+        if (paymentData.state) fullParts.push(paymentData.state);
+        if (paymentData.zip) fullParts.push(paymentData.zip);
         
         try {
-          // 2. Ask OpenStreetMap for the coordinates
-          const geoRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(cleanAddressQuery)}`);
-          const geoData = await geoRes.json();
+          const fullRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(fullParts.join(', '))}`);
+          const fullData = await fullRes.json();
           
-          if (geoData && geoData.length > 0) {
-            finalLat = parseFloat(geoData[0].lat);
-            finalLng = parseFloat(geoData[0].lon);
+          if (fullData && fullData.length > 0) {
+            finalLat = parseFloat(fullData[0].lat);
+            finalLng = parseFloat(fullData[0].lon);
           } else {
-            console.warn("Could not find address, using fallback.");
-            finalLat = 40.0150; 
-            finalLng = -105.2705;
+            // Pass 2: The street was fake! Try just the City and State!
+            console.warn("Exact street not found, falling back to City/State level...");
+            const cityStateParts = [];
+            if (paymentData.city) cityStateParts.push(paymentData.city);
+            if (paymentData.state) cityStateParts.push(paymentData.state);
+            
+            const cityStateRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(cityStateParts.join(', '))}`);
+            const cityStateData = await cityStateRes.json();
+            
+            if (cityStateData && cityStateData.length > 0) {
+              finalLat = parseFloat(cityStateData[0].lat);
+              finalLng = parseFloat(cityStateData[0].lon);
+            } else {
+              // Absolute fallback if everything is blank
+              finalLat = 37.3382; 
+              finalLng = -121.8863;
+            }
           }
         } catch (err) {
-          finalLat = 40.0150;
-          finalLng = -105.2705;
+          finalLat = 37.3382;
+          finalLng = -121.8863;
         }
       }
       // -------------------------------------
