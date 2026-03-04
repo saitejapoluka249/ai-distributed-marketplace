@@ -158,14 +158,21 @@ class ProductService(ecommerce_pb2_grpc.ProductServiceServicer):
     def SearchItems(self, request, context):
         kw = f"%{request.keywords}%"
         
-        count_query = "SELECT COUNT(*) FROM items WHERE category = ? AND (name LIKE ? OR keywords LIKE ?) AND price >= ? AND price <= ?"
-        params = [request.category, kw, kw, request.min_price, request.max_price]
+        # DYNAMIC SQL: If category is 0, we drop the "category = ?" filter entirely!
+        if request.category == 0:
+            count_query = "SELECT COUNT(*) FROM items WHERE (name LIKE ? OR keywords LIKE ?) AND price >= ? AND price <= ?"
+            params = [kw, kw, request.min_price, request.max_price]
+            query = "SELECT item_id, name, price, quantity, image_url FROM items WHERE (name LIKE ? OR keywords LIKE ?) AND price >= ? AND price <= ? LIMIT ? OFFSET ?"
+        else:
+            count_query = "SELECT COUNT(*) FROM items WHERE category = ? AND (name LIKE ? OR keywords LIKE ?) AND price >= ? AND price <= ?"
+            params = [request.category, kw, kw, request.min_price, request.max_price]
+            query = "SELECT item_id, name, price, quantity, image_url FROM items WHERE category = ? AND (name LIKE ? OR keywords LIKE ?) AND price >= ? AND price <= ? LIMIT ? OFFSET ?"
+            
         total_items = self._execute(count_query, tuple(params), fetch_one=True)[0]
         
         total_pages = (total_items + request.limit - 1) // request.limit if total_items > 0 else 1
         offset = (request.page - 1) * request.limit
         
-        query = "SELECT item_id, name, price, quantity, image_url FROM items WHERE category = ? AND (name LIKE ? OR keywords LIKE ?) AND price >= ? AND price <= ? LIMIT ? OFFSET ?"
         params.extend([request.limit, offset])
         rows = self._execute(query, tuple(params), fetch_all=True)
         

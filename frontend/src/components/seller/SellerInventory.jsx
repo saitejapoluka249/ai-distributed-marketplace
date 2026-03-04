@@ -206,10 +206,24 @@ export default function SellerInventory({ sessionId }) {
               </div>
               
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Category Code</label>
-                  <input required type="number" min="1" max="10" className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-teal-500 outline-none" value={newItem.category} onChange={e => setNewItem({...newItem, category: e.target.value})} />
-                </div>
+                {/* Replace the number input with this Select Dropdown */}
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Product Category</label>
+                <select 
+                  required
+                  value={newItem.category}
+                  onChange={e => setNewItem({...newItem, category: Number(e.target.value)})}
+                  className="w-full border border-gray-200 rounded-lg px-4 py-3 focus:ring-2 focus:ring-indigo-500 outline-none bg-gray-50 appearance-none font-medium text-gray-700"
+                >
+                  <option value="" disabled>Select a category...</option>
+                  <option value={1}>💻 Electronics & Laptops</option>
+                  <option value={2}>🎮 Video Games & Consoles</option>
+                  <option value={3}>⌚ Watches & Jewelry</option>
+                  <option value={4}>👕 Clothing & Shoes</option>
+                  <option value={5}>🏠 Home & Kitchen</option>
+                  <option value={6}>🚴 Sports & Outdoors</option>
+                </select>
+              </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Condition</label>
                   <select className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-teal-500 outline-none" value={newItem.condition} onChange={e => setNewItem({...newItem, condition: e.target.value})}>
