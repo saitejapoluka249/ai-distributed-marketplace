@@ -207,6 +207,7 @@ export default function SellerInventory({ sessionId }) {
               
               <div className="grid grid-cols-2 gap-4">
                 {/* Replace the number input with this Select Dropdown */}
+              {/* THE COMPLETE AMAZON-TIER SELLER CATEGORY DROPDOWN */}
               <div>
                 <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Product Category</label>
                 <select 
@@ -215,13 +216,33 @@ export default function SellerInventory({ sessionId }) {
                   onChange={e => setNewItem({...newItem, category: Number(e.target.value)})}
                   className="w-full border border-gray-200 rounded-lg px-4 py-3 focus:ring-2 focus:ring-indigo-500 outline-none bg-gray-50 appearance-none font-medium text-gray-700"
                 >
-                  <option value="" disabled>Select a category...</option>
-                  <option value={1}>💻 Electronics & Laptops</option>
-                  <option value={2}>🎮 Video Games & Consoles</option>
-                  <option value={3}>⌚ Watches & Jewelry</option>
-                  <option value={4}>👕 Clothing & Shoes</option>
-                  <option value={5}>🏠 Home & Kitchen</option>
-                  <option value={6}>🚴 Sports & Outdoors</option>
+                  <option value="" disabled>Select a department...</option>
+                  <option value={1}>💻 Electronics</option>
+                  <option value={2}>📱 Cell Phones & Accessories</option>
+                  <option value={3}>📺 TV & Video</option>
+                  <option value={4}>👟 Shoes & Sneakers</option>
+                  <option value={5}>📷 Cameras & Photo</option>
+                  <option value={6}>🎧 Audio & Headphones</option>
+                  <option value={7}>🏠 Home & Kitchen</option>
+                  <option value={8}>🛏️ Furniture</option>
+                  <option value={9}>🛠️ Tools & Home Improvement</option>
+                  <option value={10}>🌱 Patio, Lawn & Garden</option>
+                  <option value={11}>🐶 Pet Supplies</option>
+                  <option value={12}>👕 Men's Clothing</option>
+                  <option value={13}>👗 Women's Clothing</option>
+                  <option value={14}>🎮 Video Games</option>
+                  <option value={15}>⌚ Watches & Jewelry</option>
+                  <option value={16}>👜 Luggage & Travel</option>
+                  <option value={17}>💄 Beauty & Personal Care</option>
+                  <option value={18}>💊 Health & Household</option>
+                  <option value={19}>👶 Baby Products</option>
+                  <option value={20}>🧸 Toys & Games</option>
+                  <option value={21}>⚽ Sports & Outdoors</option>
+                  <option value={22}>🚗 Automotive</option>
+                  <option value={23}>📚 Books</option>
+                  <option value={24}>🎵 Musical Instruments</option>
+                  <option value={25}>🏢 Office Products</option>
+                  <option value={26}>🍎 Grocery & Gourmet Food</option>
                 </select>
               </div>
                 <div>

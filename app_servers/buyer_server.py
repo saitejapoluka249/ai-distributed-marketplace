@@ -11,6 +11,7 @@ from flask_cors import CORS
 import smtplib
 from email.message import EmailMessage
 import datetime
+from openai import OpenAI
 
 load_dotenv()
 
@@ -167,6 +168,61 @@ def logout():
     cust_stub.Logout(ecommerce_pb2.SessionRequest(sess_id=request.json.get('sess_id', '')))
     return jsonify({"status": "SUCCESS"})
 
+@app.route('/chat', methods=['POST'])
+def ai_chat():
+    data = request.json
+    user_msg = data.get('message', '')
+    
+    if not user_msg:
+        return jsonify({"status": "FAIL", "message": "No message provided."})
+        
+    try:
+        # --- 1. THE "RETRIEVAL" PHASE ---
+        # Fetch the real, live inventory from your gRPC database
+        resp = prod_stub.SearchItems(ecommerce_pb2.SearchRequest(
+            category=0, keywords='', min_price=0.0, max_price=9999999.0, page=1, limit=50
+        ))
+        
+        # Clean up the data into a readable text format for the AI (strip out the image URLs)
+        # It will look like: "ID: 1.1 | Apple MacBook Pro... | $2499.0 | Available: 45"
+        inventory_list = "\n".join([item.split('| IMG:')[0].strip() for item in resp.item_lines])
+        # --------------------------------
+        
+        # Initialize the client
+        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        
+        # --- 2. THE "AUGMENTATION" PHASE ---
+        system_prompt = f"""You are 'Nova', the elite AI Shopping Assistant for DistributedStore. 
+        You help customers find products, give gift recommendations, and answer questions. 
+        
+        CRITICAL RULE: You can ONLY recommend products that exist in the "Live Store Inventory" below. 
+        If a user asks for something we do not have, politely apologize and recommend the closest alternative FROM THE INVENTORY.
+        Do NOT invent products. Do NOT recommend global products outside of this list.
+        
+        Live Store Inventory:
+        {inventory_list}
+        
+        Keep your responses concise, highly professional, and friendly. Use emojis occasionally.
+        Format your responses cleanly. If you mention a product, include its price and tell them it is in stock."""
+        # -----------------------------------
+
+        # --- 3. THE "GENERATION" PHASE ---
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_msg}
+            ]
+        )
+        
+        ai_reply = response.choices[0].message.content
+        return jsonify({"status": "SUCCESS", "reply": ai_reply})
+        
+    except Exception as e:
+        print(f"OpenAI Error: {e}")
+        return jsonify({"status": "FAIL", "message": "AI services are currently busy. Please try again."})
+    
+    
 @app.route('/search', methods=['GET'])
 def search():
     try:

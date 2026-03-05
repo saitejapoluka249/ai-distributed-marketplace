@@ -1,18 +1,38 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ItemModal from './ItemModal';
+import Chatbot from './Chatbot';
 
 const BASE_URL = 'http://localhost:7003';
 
-// --- The Category Translation Dictionary ---
 export const CATEGORY_MAP = {
-  0: "All Categories",
-  1: "💻 Electronics & Laptops",
-  2: "🎮 Video Games & Consoles",
-  3: "⌚ Watches & Jewelry",
-  4: "👕 Clothing & Shoes",
-  5: "🏠 Home & Kitchen",
-  6: "🚴 Sports & Outdoors"
+  0: "All Departments",
+  1: "💻 Electronics",
+  2: "📱 Cell Phones & Accessories",
+  3: "📺 TV & Video",
+  4: "👟 Shoes & Sneakers",
+  5: "📷 Cameras & Photo",
+  6: "🎧 Audio & Headphones",
+  7: "🏠 Home & Kitchen",
+  8: "🛏️ Furniture",
+  9: "🛠️ Tools & Home Improvement",
+  10: "🌱 Patio, Lawn & Garden",
+  11: "🐶 Pet Supplies",
+  12: "👕 Men's Clothing",
+  13: "👗 Women's Clothing",
+  14: "🎮 Video Games",
+  15: "⌚ Watches & Jewelry",
+  16: "👜 Luggage & Travel",
+  17: "💄 Beauty & Personal Care",
+  18: "💊 Health & Household",
+  19: "👶 Baby Products",
+  20: "🧸 Toys & Games",
+  21: "⚽ Sports & Outdoors",
+  22: "🚗 Automotive",
+  23: "📚 Books",
+  24: "🎵 Musical Instruments",
+  25: "🏢 Office Products",
+  26: "🍎 Grocery & Gourmet Food"
 };
 
 export default function Dashboard({ sessionId }) {
@@ -27,7 +47,7 @@ export default function Dashboard({ sessionId }) {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
 
-  // --- NEW: LIVE SEARCH STATE ---
+  // Live Search State
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
 
@@ -37,7 +57,7 @@ export default function Dashboard({ sessionId }) {
     
     try {
       const response = await fetch(
-        `${BASE_URL}/search?category=${targetCategory}&keywords=${currentKeywords}&page=${targetPage}&limit=8`
+        `${BASE_URL}/search?category=${targetCategory}&keywords=${currentKeywords}&page=${targetPage}&limit=12`
       );
       const data = await response.json();
 
@@ -71,16 +91,13 @@ export default function Dashboard({ sessionId }) {
 
   useEffect(() => {
     fetchItems(1, 0, ''); 
-
     const handleRefresh = () => fetchItems(page, category, keywords);
     window.addEventListener('refreshMarketplace', handleRefresh);
-
     return () => window.removeEventListener('refreshMarketplace', handleRefresh);
   }, []);
 
-  // --- NEW: THE LIVE SEARCH DEBOUNCE EFFECT ---
+  // --- LIVE SEARCH DEBOUNCE EFFECT ---
   useEffect(() => {
-    // Only search if they've typed at least 2 letters
     if (keywords.trim().length < 2) {
       setSuggestions([]);
       setShowSuggestions(false);
@@ -89,8 +106,7 @@ export default function Dashboard({ sessionId }) {
 
     const fetchLiveSuggestions = async () => {
       try {
-        // Fetch a small limit (10) for the dropdown
-        const res = await fetch(`${BASE_URL}/search?category=${category}&keywords=${keywords}&page=1&limit=10`);
+        const res = await fetch(`${BASE_URL}/search?category=${category}&keywords=${keywords}&page=1&limit=6`);
         const data = await res.json();
         
         if (data.status === 'SUCCESS' && data.items.length > 0) {
@@ -131,12 +147,13 @@ export default function Dashboard({ sessionId }) {
       });
       const data = await response.json();
       if (data.status === 'SUCCESS') {
-        alert("Added to cart! Open the Cart to checkout.");
+        window.dispatchEvent(new Event('refreshMarketplace')); 
+        alert("✅ Item successfully added to your cart!"); 
       } else {
-        alert(data.message);
+        alert(`❌ Error: ${data.message}`);
       }
     } catch (err) {
-      alert("Failed to connect to server.");
+      alert("❌ Failed to connect to server.");
     }
   };
 
@@ -146,214 +163,205 @@ export default function Dashboard({ sessionId }) {
     setShowSuggestions(false); 
   };
 
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    show: { opacity: 1, transition: { staggerChildren: 0.1 } }
-  };
-
-  const itemVariants = {
-    hidden: { opacity: 0, y: 20 },
-    show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 300 } }
+  // Helper to render Amazon-style price ($199.99)
+  const formatPrice = (priceStr) => {
+    const num = parseFloat(priceStr);
+    if (isNaN(num)) return { dollars: "0", cents: "00" };
+    const [dollars, cents] = num.toFixed(2).split('.');
+    return { dollars, cents };
   };
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-6 pb-12">
       
-      {/* Search & Filter Bar */}
-      <motion.div 
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100"
-      >
-        {/* Clickable Category Pills */}
-        <div className="flex overflow-x-auto gap-2 pb-4 mb-4 border-b border-gray-100 hide-scrollbar">
-          {Object.entries(CATEGORY_MAP).map(([catId, catName]) => (
-            <button
-              key={catId}
-              onClick={() => {
-                setCategory(Number(catId));
-                fetchItems(1, Number(catId), keywords); 
+      {/* --- THE AMAZON-STYLE UNIFIED SEARCH BAR --- */}
+      <div className="bg-white p-4 sm:p-6 rounded-2xl shadow-sm border border-gray-100 mt-2">
+        <form 
+          onSubmit={handleSearch} 
+          className="flex w-full h-12 md:h-14 rounded-xl border-2 border-indigo-100 focus-within:border-indigo-600 focus-within:ring-4 focus-within:ring-indigo-100 overflow-visible transition-all relative z-50 bg-white"
+        >
+          {/* 1. Category Dropdown (Left) */}
+          <div className="relative bg-gray-50 border-r border-gray-200 hover:bg-gray-100 transition-colors hidden sm:block rounded-l-lg">
+            <select
+              value={category}
+              onChange={(e) => {
+                const newCat = Number(e.target.value);
+                setCategory(newCat);
+                fetchItems(1, newCat, keywords); // Instantly search when category changes
               }}
-              className={`whitespace-nowrap px-4 py-2 rounded-full text-sm font-bold transition-all ${
-                category === Number(catId) 
-                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200' 
-                  : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
-              }`}
+              className="h-full py-2 pl-4 pr-8 bg-transparent text-sm font-bold text-gray-700 outline-none appearance-none cursor-pointer w-40 truncate"
             >
-              {catName}
-            </button>
-          ))}
-        </div>
+              {Object.entries(CATEGORY_MAP).map(([catId, catName]) => (
+                <option key={catId} value={catId}>{catName}</option>
+              ))}
+            </select>
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+              <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+            </div>
+          </div>
 
-        <form onSubmit={handleSearch} className="flex flex-col md:flex-row gap-4 mt-4 relative">
+          {/* 2. Search Input (Middle) */}
           <div className="flex-1 relative">
-            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Search Keywords</label>
             <input
               type="text"
-              className="w-full bg-gray-50 border border-gray-200 text-gray-900 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white px-4 py-3 outline-none transition-all"
-              placeholder="e.g., Laptop, Mouse..."
+              className="w-full h-full py-2 px-4 text-gray-900 outline-none text-base bg-transparent placeholder-gray-400"
+              placeholder="Search for laptops, games, shoes..."
               value={keywords}
               onChange={(e) => setKeywords(e.target.value)}
               onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
               onBlur={() => setTimeout(() => setShowSuggestions(false), 200)} 
             />
 
-            {/* --- NEW: ELASTIC-SEARCH STYLE DROPDOWN --- */}
+            {/* LIVE AUTOCOMPLETE DROPDOWN */}
             <AnimatePresence>
               {showSuggestions && (
                 <motion.div 
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  className="absolute z-50 w-full mt-2 bg-white border border-gray-200 shadow-2xl rounded-xl overflow-hidden"
+                  initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }}
+                  className="absolute top-full left-0 w-full mt-2 bg-white border border-gray-200 shadow-2xl rounded-xl overflow-hidden z-[100]"
                 >
-                  <ul className="max-h-60 overflow-y-auto">
+                  <ul className="max-h-80 overflow-y-auto">
                     {suggestions.map(item => (
                       <li 
                         key={item.id}
                         onMouseDown={() => openItemDetails(item.id)}
-                        className="px-4 py-3 border-b border-gray-50 hover:bg-indigo-50 cursor-pointer flex justify-between items-center transition-colors group"
+                        className="px-5 py-3 border-b border-gray-50 hover:bg-indigo-50 cursor-pointer flex items-center justify-between transition-colors group"
                       >
-                        <div className="flex flex-col">
-                          <span className="font-bold text-gray-800 group-hover:text-indigo-700">{item.name}</span>
-                          <span className="text-xs text-gray-400">ID: {item.id}</span>
+                        <div className="flex items-center gap-3 overflow-hidden">
+                          <svg className="w-4 h-4 text-gray-400 group-hover:text-indigo-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                          <span className="font-medium text-gray-800 group-hover:text-indigo-700 truncate">{item.name}</span>
                         </div>
-                        <span className="font-black text-indigo-600">${item.price}</span>
+                        <span className="font-bold text-gray-600 ml-4">${item.price}</span>
                       </li>
                     ))}
                   </ul>
                   <div 
                     onMouseDown={handleSearch} 
-                    className="px-4 py-2 bg-gray-50 text-xs font-bold text-center text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 cursor-pointer transition-colors"
+                    className="px-5 py-3 bg-gray-50 text-sm font-bold text-center text-indigo-600 hover:bg-indigo-100 cursor-pointer transition-colors"
                   >
                     View all results for "{keywords}"
                   </div>
                 </motion.div>
               )}
             </AnimatePresence>
-
           </div>
 
-          <div className="flex items-end">
-            <button
-              type="submit"
-              className="w-full md:w-auto bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-8 rounded-xl shadow-md transition-colors h-[50px]"
-            >
-              Search
-            </button>
-          </div>
+          {/* 3. Search Button (Right) */}
+          <button
+            type="submit"
+            className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 sm:px-10 font-bold flex items-center justify-center transition-colors rounded-r-lg sm:rounded-none"
+          >
+            <svg className="w-5 h-5 sm:mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+            <span className="hidden sm:block">Search</span>
+          </button>
         </form>
-      </motion.div>
+      </div>
 
-      {/* Main Content Area */}
+      {/* --- MAIN PRODUCT GRID --- */}
       <div>
         {loading ? (
-          <div className="flex justify-center items-center py-20">
+          <div className="flex justify-center items-center py-32">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
           </div>
         ) : error ? (
-          <div className="bg-red-50 text-red-600 p-4 rounded-xl text-center font-medium border border-red-100">
-            {error}
-          </div>
+          <div className="bg-red-50 text-red-600 p-4 rounded-xl text-center font-medium border border-red-100">{error}</div>
         ) : items.length === 0 ? (
-          <div className="text-center py-20 bg-white rounded-2xl border border-gray-100 shadow-sm">
-            <svg className="mx-auto h-16 w-16 text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path>
-            </svg>
-            <h3 className="text-xl font-bold text-gray-900">No items found</h3>
-            <p className="text-gray-500 mt-2">Try adjusting your search keywords or category.</p>
+          <div className="text-center py-32 bg-white rounded-3xl border border-gray-100 shadow-sm mt-4">
+            <h3 className="text-2xl font-bold text-gray-900">No items found</h3>
+            <p className="text-gray-500 mt-2">Try adjusting your search or browsing a different category.</p>
           </div>
         ) : (
           <>
             <motion.div 
-              variants={containerVariants}
-              initial="hidden"
-              animate="show"
+              initial="hidden" animate="show"
+              variants={{ hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.05 } } }}
               className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
             >
-              {items.map((item) => (
-                <motion.div
-                  key={item.id}
-                  variants={itemVariants}
-                  whileHover={{ y: -5, boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)" }}
-                  className="bg-white rounded-2xl border border-gray-100 overflow-hidden flex flex-col transition-all duration-300"
-                >
-                  
-                  {/* Image Render Block */}
-                  <div className="h-48 bg-gray-100 flex items-center justify-center relative overflow-hidden group-hover:opacity-90 transition-opacity">
-                    {item.image ? (
-                      <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
-                    ) : (
-                      <svg className="w-12 h-12 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-                    )}
-
-                    <div className="absolute top-3 left-3 bg-white/90 backdrop-blur-sm px-2.5 py-1 rounded-lg shadow-sm border border-gray-100">
-                      <span className="text-xs font-bold text-indigo-700 uppercase tracking-wider">
-                        {CATEGORY_MAP[item.category] || "Other"}
-                      </span>
-                    </div>
-
-                    <div className="absolute top-3 right-3 bg-white/80 backdrop-blur-sm px-2 py-1 rounded-md text-xs font-bold text-indigo-700">
-                      ID: {item.id}
-                    </div>
-                    {Number(item.available) < 5 && Number(item.available) > 0 && (
-                      <div className="absolute bottom-3 left-3 bg-red-500 text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-sm flex items-center gap-1 animate-pulse">
-                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd"></path></svg>
-                        Only {item.available} left
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="p-5 flex-1 flex flex-col">
-                    <h3 className="text-lg font-bold text-gray-900 mb-1 line-clamp-1">{item.name}</h3>
-                    <p className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600 mb-4">
-                      ${item.price}
-                    </p>
+              {items.map((item) => {
+                const { dollars, cents } = formatPrice(item.price);
+                return (
+                  <motion.div
+                    key={item.id}
+                    variants={{ hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0 } }}
+                    className="bg-white rounded-2xl overflow-hidden flex flex-col group border border-gray-200 hover:border-indigo-300 hover:shadow-xl transition-all duration-300"
+                  >
                     
-                    <div className="mt-auto">
-                      <div className="flex justify-between items-center text-sm text-gray-500 mb-4">
-                        <span className="flex items-center gap-1">
-                          <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
-                          {item.available} in stock
+                    {/* Clickable Image Area */}
+                    <div 
+                      onClick={() => openItemDetails(item.id)}
+                      className="h-56 bg-gray-50 flex items-center justify-center relative overflow-hidden cursor-pointer p-4"
+                    >
+                      {item.image ? (
+                        <img src={item.image} alt={item.name} className="w-full h-full object-contain mix-blend-multiply group-hover:scale-105 transition-transform duration-500" />
+                      ) : (
+                        <svg className="w-12 h-12 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                      )}
+
+                      {/* Category Badge */}
+                      <div className="absolute top-3 left-3 bg-white/95 backdrop-blur px-2 py-1 rounded shadow-sm border border-gray-100">
+                        <span className="text-[10px] font-black text-gray-600 uppercase tracking-wider">
+                          {CATEGORY_MAP[item.category]?.replace(/[^a-zA-Z &]/g, '') || "OTHER"}
                         </span>
                       </div>
 
-                      <div className="flex gap-2">
-                        <button 
-                          onClick={() => openItemDetails(item.id)}
-                          className="flex-1 bg-white border-2 border-indigo-100 hover:border-indigo-600 hover:text-indigo-600 text-gray-700 font-bold py-2.5 rounded-xl transition-colors duration-200 text-sm"
-                        >
-                          View Details
-                        </button>
+                      {/* Low Stock Badge */}
+                      {Number(item.available) < 5 && Number(item.available) > 0 && (
+                        <div className="absolute bottom-3 left-3 bg-red-600 text-white text-[10px] font-bold px-2 py-1 rounded shadow-sm flex items-center gap-1">
+                          Only {item.available} left
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Content Details */}
+                    <div className="p-5 flex-1 flex flex-col bg-white">
+                      
+                      {/* Clickable Title */}
+                      <h3 
+                        onClick={() => openItemDetails(item.id)}
+                        className="text-base font-medium text-gray-900 line-clamp-2 cursor-pointer hover:text-indigo-600 transition-colors leading-snug mb-1"
+                      >
+                        {item.name}
+                      </h3>
+                      
+                      {/* Amazon-Style Price Display */}
+                      <div className="flex items-start mt-2 mb-4">
+                        <span className="text-sm font-bold text-gray-900 mt-1">$</span>
+                        <span className="text-3xl font-black text-gray-900 tracking-tight">{dollars}</span>
+                        <span className="text-sm font-bold text-gray-900 mt-1">{cents}</span>
+                      </div>
+                      
+                      {/* Primary Action Button */}
+                      <div className="mt-auto">
                         <button 
                           onClick={() => handleAddToCart(item.id)}
-                          className="flex-1 bg-indigo-50 hover:bg-indigo-600 hover:text-white text-indigo-700 font-bold py-2.5 rounded-xl transition-colors duration-200 text-sm"
+                          className="w-full bg-indigo-50 hover:bg-indigo-600 text-indigo-700 hover:text-white border border-indigo-100 hover:border-indigo-600 font-bold py-2.5 rounded-full transition-all duration-200 text-sm flex items-center justify-center gap-2"
                         >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
                           Add to Cart
                         </button>
                       </div>
                     </div>
-                  </div>
-                </motion.div>
-              ))}
+                  </motion.div>
+                );
+              })}
             </motion.div>
 
+            {/* Pagination */}
             {totalPages > 1 && (
-              <div className="flex justify-center items-center gap-4 mt-10">
+              <div className="flex justify-center items-center gap-4 mt-12 pb-8">
                 <button 
                   onClick={() => fetchItems(page - 1, category, keywords)}
                   disabled={page === 1}
-                  className="px-4 py-2 rounded-lg bg-white border border-gray-200 text-gray-700 font-medium hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                  className="px-5 py-2.5 rounded-xl bg-white border border-gray-200 text-gray-700 font-bold hover:bg-gray-50 disabled:opacity-50 transition-colors shadow-sm"
                 >
                   Previous
                 </button>
-                <span className="text-sm font-medium text-gray-600 bg-white px-4 py-2 rounded-lg border border-gray-200 shadow-sm">
+                <span className="text-sm font-bold text-gray-500">
                   Page {page} of {totalPages}
                 </span>
                 <button 
                   onClick={() => fetchItems(page + 1, category, keywords)}
                   disabled={page === totalPages}
-                  className="px-4 py-2 rounded-lg bg-white border border-gray-200 text-gray-700 font-medium hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                  className="px-5 py-2.5 rounded-xl bg-white border border-gray-200 text-gray-700 font-bold hover:bg-gray-50 disabled:opacity-50 transition-colors shadow-sm"
                 >
                   Next
                 </button>
@@ -369,6 +377,8 @@ export default function Dashboard({ sessionId }) {
         itemId={selectedItemId} 
         sessionId={sessionId} 
       />
+      {/* Drop the new AI Chatbot right here! */}
+      <Chatbot />
     </div>
   );
 }
