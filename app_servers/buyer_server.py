@@ -173,6 +173,7 @@ def ai_chat():
     data = request.json
     user_msg = data.get('message', '')
     sess_id = data.get('sess_id', '') 
+    history = data.get('history', [])
     
     if not user_msg:
         return jsonify({"status": "FAIL", "message": "No message provided."})
@@ -266,12 +267,16 @@ RULES:
 6. Always be concise, helpful, and use emojis."""
 
         client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        openai_messages = [{"role": "system", "content": system_prompt}]
+        
+        if history:
+            for msg in history[-10:]:
+                openai_messages.append({"role": msg['role'], "content": msg['content']})
+        else:
+            openai_messages.append({"role": "user", "content": user_msg})
         response = client.chat.completions.create(
             model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_msg}
-            ]
+            messages=openai_messages 
         )
         
         ai_reply = response.choices[0].message.content
@@ -347,6 +352,43 @@ Do NOT return any other text, explanations, or words. If absolutely nothing matc
     except Exception as e:
         print(f"AI Search Error: {e}")
         return jsonify({"status": "FAIL", "message": "AI Search is currently unavailable."})
+    
+@app.route('/item/description', methods=['GET'])
+def get_item_description():
+    item_id = request.args.get('item_id')
+    if not item_id:
+        return jsonify({"status": "FAIL", "message": "Missing item_id"})
+
+    try:
+        resp = prod_stub.GetItem(ecommerce_pb2.IDRequest(id=item_id))
+        if not resp.success:
+            return jsonify({"status": "FAIL", "message": "Item not found"})
+            
+        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        system_prompt = f"""You are an expert Amazon copywriter. 
+        Write an "About this item" section for a product named '{resp.name}'.
+        The condition is {resp.condition}. 
+        
+        FORMAT RULES:
+        - Output EXACTLY 3 bullet points.
+        - Start each bullet point with a relevant emoji.
+        - Make it sound exciting, professional, and highly desirable.
+        - Do not include any introductory or concluding text, JUST the 3 bullet points.
+        - STRICT RULE: DO NOT use markdown, asterisks (**), or bold text. Use plain text only."""
+        
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": "Generate the description."}
+            ]
+        )
+        
+        return jsonify({"status": "SUCCESS", "description": response.choices[0].message.content})
+        
+    except Exception as e:
+        print(f"OpenAI Description Error: {e}")
+        return jsonify({"status": "FAIL", "message": "Could not generate description."})
     
 @app.route('/seller/summary', methods=['GET'])
 def get_seller_summary():
@@ -507,7 +549,16 @@ def manage_wishlist():
         for iid in item_ids:
             p_resp = prod_stub.GetItem(ecommerce_pb2.IDRequest(id=iid))
             if p_resp.success:
-                enriched_wishlist.append({"id": iid, "name": p_resp.name, "price": p_resp.price, "qty_available": p_resp.quantity})
+                img_str = p_resp.image_url.strip() if p_resp.image_url else None
+                first_img = img_str.split('|||')[0] if img_str and img_str != "None" else None
+                
+                enriched_wishlist.append({
+                    "id": iid, 
+                    "name": p_resp.name, 
+                    "price": p_resp.price, 
+                    "qty_available": p_resp.quantity,
+                    "image_url": first_img 
+                })
         return jsonify({"status": "SUCCESS", "wishlist": enriched_wishlist})
 
     if request.method == 'POST':

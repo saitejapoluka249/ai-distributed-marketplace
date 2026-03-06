@@ -26,15 +26,26 @@ export default function Chatbot({ sessionId }) {
     if (!input.trim()) return;
 
     const userText = input;
-    setMessages(prev => [...prev, { role: 'user', content: userText }]);
+    
+    const newMessages = [...messages, { role: 'user', content: userText }];
+    setMessages(newMessages);
     setInput('');
     setIsLoading(true);
+
+    const chatHistory = newMessages.map(msg => ({
+      role: msg.role === 'ai' ? 'assistant' : 'user',
+      content: msg.content
+    }));
 
     try {
       const response = await fetch(`${BASE_URL}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: userText, sess_id: sessionId }) 
+        body: JSON.stringify({ 
+          message: userText, 
+          sess_id: sessionId,
+          history: chatHistory 
+        }) 
       });
       
       const data = await response.json();

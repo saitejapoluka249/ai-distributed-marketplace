@@ -15,14 +15,20 @@ export default function SellerInventory({ sessionId }) {
   // New Item Form State
   const [newItem, setNewItem] = useState({ name: '', category: '1', keywords: '', condition: 'New', price: '', quantity: '', image_url: '' });
   const handleImageUpload = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setNewItem({...newItem, image_url: reader.result}); // Converts file to Base64 string!
-      };
-      reader.readAsDataURL(file);
-    }
+    const files = Array.from(e.target.files).slice(0, 4); 
+    if (files.length === 0) return;
+
+    const promises = files.map(file => {
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.readAsDataURL(file);
+      });
+    });
+
+    Promise.all(promises).then(base64Images => {
+      setNewItem({...newItem, image_url: base64Images.join('|||')}); 
+    });
   };
   const [formLoading, setFormLoading] = useState(false);
 
@@ -70,6 +76,12 @@ export default function SellerInventory({ sessionId }) {
 
   const handleAddItem = async (e) => {
     e.preventDefault();
+
+    if (!newItem.image_url) {
+      alert("❌ You must upload at least one product photo!");
+      return;
+    }
+
     setFormLoading(true);
     try {
       const response = await fetch(`${SELLER_URL}/items`, {
@@ -327,14 +339,18 @@ export default function SellerInventory({ sessionId }) {
                 <input required type="text" className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-teal-500 outline-none" value={newItem.keywords} onChange={e => setNewItem({...newItem, keywords: e.target.value})} placeholder="e.g. electronics, mouse, wireless" />
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Product Photo</label>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Product Photos (Max 4) *</label>
                 <input 
-                  type="file" accept="image/*" 
+                  type="file" accept="image/*" multiple required 
                   onChange={handleImageUpload} 
                   className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-bold file:bg-teal-50 file:text-teal-700 hover:file:bg-teal-100 transition-colors"
                 />
                 {newItem.image_url && (
-                  <img src={newItem.image_url} alt="Preview" className="mt-3 h-24 w-24 object-cover rounded-xl border border-slate-200 shadow-sm" />
+                  <div className="flex gap-2 mt-3 overflow-x-auto pb-2">
+                    {newItem.image_url.split('|||').map((img, idx) => (
+                      <img key={idx} src={img} alt={`Preview ${idx}`} className="h-20 w-20 object-cover rounded-xl border border-slate-200 shadow-sm shrink-0" />
+                    ))}
+                  </div>
                 )}
               </div>
 

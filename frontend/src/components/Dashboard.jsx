@@ -67,16 +67,18 @@ export default function Dashboard({ sessionId }) {
         const parsedItems = data.items.map(itemStr => {
           const match = itemStr.match(/ID:\s*([\d\.]+)\s*\|\s*(.*?)\s*\|\s*\$([\d\.]+)\s*\|\s*Available:\s*(\d+)(?:\s*\|\s*IMG:\s*(.*))?/i);
           if (match) {
+            const rawImgStr = match[5] && match[5].trim() !== "None" ? match[5].trim() : null;
+            const firstImage = rawImgStr ? rawImgStr.split('|||')[0] : null;
+
             return {
               id: match[1],
               name: match[2].trim(),
               price: match[3],
               available: match[4],
-              image: match[5] && match[5].trim() !== "None" ? match[5].trim() : null,
+              image: firstImage, 
               category: match[1].split('.')[0]
             };
           }
-          return { id: 'N/A', name: 'Unknown', price: '0', available: '0', image: null, category: '0' };
         });
         setItems(parsedItems);
         setTotalPages(data.total_pages);
@@ -156,16 +158,18 @@ export default function Dashboard({ sessionId }) {
         const parsedItems = data.items.map(itemStr => {
           const match = itemStr.match(/ID:\s*([\d\.]+)\s*\|\s*(.*?)\s*\|\s*\$([\d\.]+)\s*\|\s*Available:\s*(\d+)(?:\s*\|\s*IMG:\s*(.*))?/i);
           if (match) {
+            const rawImgStr = match[5] && match[5].trim() !== "None" ? match[5].trim() : null;
+            const firstImage = rawImgStr ? rawImgStr.split('|||')[0] : null;
+
             return {
               id: match[1],
               name: match[2].trim(),
               price: match[3],
               available: match[4],
-              image: match[5] && match[5].trim() !== "None" ? match[5].trim() : null,
+              image: firstImage, 
               category: match[1].split('.')[0]
             };
           }
-          return { id: 'N/A', name: 'Unknown', price: '0', available: '0', image: null, category: '0' };
         });
         
         setItems(parsedItems);
