@@ -51,6 +51,9 @@ export default function Dashboard({ sessionId }) {
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
 
+  // --- NEW: AI Vibe Search Toggle ---
+  const [isAiSearch, setIsAiSearch] = useState(false);
+
   const fetchItems = async (targetPage = 1, targetCategory = category, currentKeywords = keywords) => {
     setLoading(true);
     setError('');
@@ -98,7 +101,8 @@ export default function Dashboard({ sessionId }) {
 
   // --- LIVE SEARCH DEBOUNCE EFFECT ---
   useEffect(() => {
-    if (keywords.trim().length < 2) {
+    // We disable live auto-complete if the user is using the AI Search feature
+    if (keywords.trim().length < 2 || isAiSearch) {
       setSuggestions([]);
       setShowSuggestions(false);
       return;
@@ -130,12 +134,57 @@ export default function Dashboard({ sessionId }) {
     }, 300); 
 
     return () => clearTimeout(timeoutId);
-  }, [keywords, category]);
+  }, [keywords, category, isAiSearch]);
 
-  const handleSearch = (e) => {
+  // --- NEW: THE AI-INTEGRATED SEARCH HANDLER ---
+  const handleSearch = async (e) => {
     if (e) e.preventDefault();
-    setShowSuggestions(false); 
-    fetchItems(1, category, keywords);
+    setShowSuggestions(false); // Close suggestions if they hit enter
+    setLoading(true);
+    setError('');
+
+    try {
+      let url = '';
+      
+      // If AI Search is toggled ON, hit the new AI endpoint
+      if (isAiSearch && keywords.trim() !== '') {
+        url = `${BASE_URL}/search/ai?query=${encodeURIComponent(keywords)}`;
+      } else {
+        // Otherwise, do the standard SQL category/keyword search
+        url = `${BASE_URL}/search?category=${category}&keywords=${encodeURIComponent(keywords)}&page=1&limit=12`;
+      }
+
+      const response = await fetch(url);
+      const data = await response.json();
+      
+      if (data.status === 'SUCCESS') {
+        // We parse the data exactly like the normal fetchItems function does
+        const parsedItems = data.items.map(itemStr => {
+          const match = itemStr.match(/ID:\s*([\d\.]+)\s*\|\s*(.*?)\s*\|\s*\$([\d\.]+)\s*\|\s*Available:\s*(\d+)(?:\s*\|\s*IMG:\s*(.*))?/i);
+          if (match) {
+            return {
+              id: match[1],
+              name: match[2].trim(),
+              price: match[3],
+              available: match[4],
+              image: match[5] && match[5].trim() !== "None" ? match[5].trim() : null,
+              category: match[1].split('.')[0]
+            };
+          }
+          return { id: 'N/A', name: 'Unknown', price: '0', available: '0', image: null, category: '0' };
+        });
+        
+        setItems(parsedItems);
+        setTotalPages(data.total_pages);
+        setPage(data.current_page);
+      } else {
+        setError(data.message || 'Failed to search items.');
+      }
+    } catch (err) {
+      setError('Cannot connect to the backend server for search.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleAddToCart = async (itemId) => {
@@ -163,7 +212,6 @@ export default function Dashboard({ sessionId }) {
     setShowSuggestions(false); 
   };
 
-  // Helper to render Amazon-style price ($199.99)
   const formatPrice = (priceStr) => {
     const num = parseFloat(priceStr);
     if (isNaN(num)) return { dollars: "0", cents: "00" };
@@ -174,22 +222,26 @@ export default function Dashboard({ sessionId }) {
   return (
     <div className="flex flex-col gap-6 pb-12">
       
-      {/* --- THE AMAZON-STYLE UNIFIED SEARCH BAR --- */}
       <div className="bg-white p-4 sm:p-6 rounded-2xl shadow-sm border border-gray-100 mt-2">
         <form 
           onSubmit={handleSearch} 
-          className="flex w-full h-12 md:h-14 rounded-xl border-2 border-indigo-100 focus-within:border-indigo-600 focus-within:ring-4 focus-within:ring-indigo-100 overflow-visible transition-all relative z-50 bg-white"
+          className={`flex w-full h-12 md:h-14 rounded-xl border-2 transition-all relative z-50 bg-white ${
+            isAiSearch 
+              ? 'border-purple-300 focus-within:border-purple-600 focus-within:ring-4 focus-within:ring-purple-100' 
+              : 'border-indigo-100 focus-within:border-indigo-600 focus-within:ring-4 focus-within:ring-indigo-100'
+          }`}
         >
-          {/* 1. Category Dropdown (Left) */}
-          <div className="relative bg-gray-50 border-r border-gray-200 hover:bg-gray-100 transition-colors hidden sm:block rounded-l-lg">
+          {/* Category Dropdown - Disabled if AI is searching! */}
+          <div className={`relative bg-gray-50 border-r border-gray-200 transition-colors hidden sm:block rounded-l-lg ${isAiSearch ? 'opacity-50' : 'hover:bg-gray-100'}`}>
             <select
               value={category}
               onChange={(e) => {
                 const newCat = Number(e.target.value);
                 setCategory(newCat);
-                fetchItems(1, newCat, keywords); // Instantly search when category changes
+                fetchItems(1, newCat, keywords);
               }}
-              className="h-full py-2 pl-4 pr-8 bg-transparent text-sm font-bold text-gray-700 outline-none appearance-none cursor-pointer w-40 truncate"
+              disabled={isAiSearch}
+              className="h-full py-2 pl-4 pr-8 bg-transparent text-sm font-bold text-gray-700 outline-none appearance-none cursor-pointer w-40 truncate disabled:cursor-not-allowed"
             >
               {Object.entries(CATEGORY_MAP).map(([catId, catName]) => (
                 <option key={catId} value={catId}>{catName}</option>
@@ -200,21 +252,37 @@ export default function Dashboard({ sessionId }) {
             </div>
           </div>
 
-          {/* 2. Search Input (Middle) */}
-          <div className="flex-1 relative">
+          {/* Search Input */}
+          <div className="flex-1 relative flex">
             <input
               type="text"
               className="w-full h-full py-2 px-4 text-gray-900 outline-none text-base bg-transparent placeholder-gray-400"
-              placeholder="Search for laptops, games, shoes..."
+              placeholder={isAiSearch ? "Describe what you need (e.g., 'Beach trip essentials')" : "Search products..."}
               value={keywords}
               onChange={(e) => setKeywords(e.target.value)}
               onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
               onBlur={() => setTimeout(() => setShowSuggestions(false), 200)} 
             />
 
+            {/* AI Toggle Button inside the input bar */}
+            <div className="flex items-center pr-2">
+              <button
+                type="button"
+                onClick={() => setIsAiSearch(!isAiSearch)}
+                className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm font-bold flex items-center gap-1.5 transition-all ${
+                  isAiSearch 
+                    ? 'bg-purple-100 text-purple-700 hover:bg-purple-200' 
+                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-purple-600'
+                }`}
+                title="Toggle AI Semantic Search"
+              >
+                ✨ <span className="hidden sm:inline">{isAiSearch ? 'AI Active' : 'AI Search'}</span>
+              </button>
+            </div>
+
             {/* LIVE AUTOCOMPLETE DROPDOWN */}
             <AnimatePresence>
-              {showSuggestions && (
+              {showSuggestions && !isAiSearch && (
                 <motion.div 
                   initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }}
                   className="absolute top-full left-0 w-full mt-2 bg-white border border-gray-200 shadow-2xl rounded-xl overflow-hidden z-[100]"
@@ -245,10 +313,12 @@ export default function Dashboard({ sessionId }) {
             </AnimatePresence>
           </div>
 
-          {/* 3. Search Button (Right) */}
+          {/* Search Button */}
           <button
             type="submit"
-            className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 sm:px-10 font-bold flex items-center justify-center transition-colors rounded-r-lg sm:rounded-none"
+            className={`text-white px-6 sm:px-10 font-bold flex items-center justify-center transition-colors rounded-r-lg sm:rounded-none ${
+              isAiSearch ? 'bg-purple-600 hover:bg-purple-700' : 'bg-indigo-600 hover:bg-indigo-700'
+            }`}
           >
             <svg className="w-5 h-5 sm:mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
             <span className="hidden sm:block">Search</span>
@@ -260,7 +330,7 @@ export default function Dashboard({ sessionId }) {
       <div>
         {loading ? (
           <div className="flex justify-center items-center py-32">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+            <div className={`animate-spin rounded-full h-12 w-12 border-b-2 ${isAiSearch ? 'border-purple-600' : 'border-indigo-600'}`}></div>
           </div>
         ) : error ? (
           <div className="bg-red-50 text-red-600 p-4 rounded-xl text-center font-medium border border-red-100">{error}</div>
@@ -285,7 +355,6 @@ export default function Dashboard({ sessionId }) {
                     className="bg-white rounded-2xl overflow-hidden flex flex-col group border border-gray-200 hover:border-indigo-300 hover:shadow-xl transition-all duration-300"
                   >
                     
-                    {/* Clickable Image Area */}
                     <div 
                       onClick={() => openItemDetails(item.id)}
                       className="h-56 bg-gray-50 flex items-center justify-center relative overflow-hidden cursor-pointer p-4"
@@ -296,14 +365,12 @@ export default function Dashboard({ sessionId }) {
                         <svg className="w-12 h-12 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
                       )}
 
-                      {/* Category Badge */}
                       <div className="absolute top-3 left-3 bg-white/95 backdrop-blur px-2 py-1 rounded shadow-sm border border-gray-100">
                         <span className="text-[10px] font-black text-gray-600 uppercase tracking-wider">
                           {CATEGORY_MAP[item.category]?.replace(/[^a-zA-Z &]/g, '') || "OTHER"}
                         </span>
                       </div>
 
-                      {/* Low Stock Badge */}
                       {Number(item.available) < 5 && Number(item.available) > 0 && (
                         <div className="absolute bottom-3 left-3 bg-red-600 text-white text-[10px] font-bold px-2 py-1 rounded shadow-sm flex items-center gap-1">
                           Only {item.available} left
@@ -311,10 +378,8 @@ export default function Dashboard({ sessionId }) {
                       )}
                     </div>
 
-                    {/* Content Details */}
                     <div className="p-5 flex-1 flex flex-col bg-white">
                       
-                      {/* Clickable Title */}
                       <h3 
                         onClick={() => openItemDetails(item.id)}
                         className="text-base font-medium text-gray-900 line-clamp-2 cursor-pointer hover:text-indigo-600 transition-colors leading-snug mb-1"
@@ -322,14 +387,12 @@ export default function Dashboard({ sessionId }) {
                         {item.name}
                       </h3>
                       
-                      {/* Amazon-Style Price Display */}
                       <div className="flex items-start mt-2 mb-4">
                         <span className="text-sm font-bold text-gray-900 mt-1">$</span>
                         <span className="text-3xl font-black text-gray-900 tracking-tight">{dollars}</span>
                         <span className="text-sm font-bold text-gray-900 mt-1">{cents}</span>
                       </div>
                       
-                      {/* Primary Action Button */}
                       <div className="mt-auto">
                         <button 
                           onClick={() => handleAddToCart(item.id)}
@@ -345,8 +408,7 @@ export default function Dashboard({ sessionId }) {
               })}
             </motion.div>
 
-            {/* Pagination */}
-            {totalPages > 1 && (
+            {totalPages > 1 && !isAiSearch && (
               <div className="flex justify-center items-center gap-4 mt-12 pb-8">
                 <button 
                   onClick={() => fetchItems(page - 1, category, keywords)}
@@ -377,8 +439,7 @@ export default function Dashboard({ sessionId }) {
         itemId={selectedItemId} 
         sessionId={sessionId} 
       />
-      {/* Drop the new AI Chatbot right here! */}
-      <Chatbot />
+      <Chatbot sessionId={sessionId} />
     </div>
   );
 }

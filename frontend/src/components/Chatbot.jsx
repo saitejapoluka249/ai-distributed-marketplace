@@ -3,15 +3,14 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 const BASE_URL = 'http://localhost:7003';
 
-export default function Chatbot() {
+export default function Chatbot({ sessionId }) {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([
-    { role: 'ai', content: "Hi! I'm Nova, your AI Shopping Assistant. Looking for a gift or a specific item today? ✨" }
+    { role: 'ai', content: "Hi! I'm Nova, your AI Shopping Assistant. Looking for a gift, need a discount code, or want to track an order? ✨" }
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   
-  // Ref to automatically scroll to the newest message
   const messagesEndRef = useRef(null);
 
   const scrollToBottom = () => {
@@ -27,22 +26,19 @@ export default function Chatbot() {
     if (!input.trim()) return;
 
     const userText = input;
-    // 1. Add user message to UI immediately
     setMessages(prev => [...prev, { role: 'user', content: userText }]);
     setInput('');
     setIsLoading(true);
 
     try {
-      // 2. Call our new Python OpenAI endpoint
       const response = await fetch(`${BASE_URL}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: userText })
+        body: JSON.stringify({ message: userText, sess_id: sessionId }) 
       });
       
       const data = await response.json();
       
-      // 3. Add AI response to UI
       if (data.status === 'SUCCESS') {
         setMessages(prev => [...prev, { role: 'ai', content: data.reply }]);
       } else {
@@ -55,10 +51,65 @@ export default function Chatbot() {
     }
   };
 
+  const handleDirectAddToCart = async (itemId) => {
+    try {
+      const response = await fetch(`${BASE_URL}/cart`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sess_id: sessionId, item_id: itemId, qty: 1 })
+      });
+      const data = await response.json();
+      if (data.status === 'SUCCESS') {
+        window.dispatchEvent(new Event('refreshMarketplace')); 
+        alert("✅ Item added directly from Nova!");
+      } else {
+        alert(`❌ Error: ${data.message}`);
+      }
+    } catch (err) {
+      alert("Failed to connect to server.");
+    }
+  };
+
+  const renderMessage = (content) => {
+    const cartRegex = /\[ADD_CART:(.*?):(.*?):(.*?)\]/g;
+    const parts = [];
+    let lastIndex = 0;
+    let match;
+
+    while ((match = cartRegex.exec(content)) !== null) {
+      if (match.index > lastIndex) {
+        parts.push(<span key={lastIndex}>{content.slice(lastIndex, match.index)}</span>);
+      }
+
+      const itemId = match[1];
+      const itemName = match[2];
+      const price = match[3];
+
+      parts.push(
+        <div key={match.index} className="my-3 p-3 bg-white border border-indigo-100 rounded-xl shadow-sm block">
+          <div className="text-[10px] font-black uppercase text-indigo-400 mb-1 tracking-wider">Nova Suggestion</div>
+          <div className="font-bold text-gray-800 text-sm mb-2">{itemName} - ${price}</div>
+          <button 
+            onClick={() => handleDirectAddToCart(itemId)}
+            className="w-full bg-indigo-50 hover:bg-indigo-600 text-indigo-700 hover:text-white font-bold py-2 rounded-lg transition-colors text-xs flex items-center justify-center gap-2"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+            Add to Cart
+          </button>
+        </div>
+      );
+      lastIndex = cartRegex.lastIndex;
+    }
+
+    if (lastIndex < content.length) {
+      parts.push(<span key={lastIndex}>{content.slice(lastIndex)}</span>);
+    }
+    return parts;
+  };
+
   return (
     <div className="fixed bottom-6 right-6 z-[9999]">
       <AnimatePresence>
-        {/* THE CHAT WINDOW */}
         {isOpen && (
           <motion.div
             initial={{ opacity: 0, y: 20, scale: 0.95 }}
@@ -67,7 +118,6 @@ export default function Chatbot() {
             className="absolute bottom-20 right-0 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-gray-200 flex flex-col overflow-hidden"
             style={{ height: '500px' }}
           >
-            {/* Header */}
             <div className="bg-indigo-600 p-4 flex justify-between items-center text-white">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-xl">✨</div>
@@ -81,23 +131,21 @@ export default function Chatbot() {
               </button>
             </div>
 
-            {/* Chat History */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
               {messages.map((msg, i) => (
                 <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                   <div 
-                    className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm shadow-sm ${
+                    className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm shadow-sm ${
                       msg.role === 'user' 
                         ? 'bg-indigo-600 text-white rounded-br-sm' 
                         : 'bg-white text-gray-800 border border-gray-100 rounded-bl-sm'
                     }`}
                   >
-                    {msg.content}
+                    {msg.role === 'ai' ? renderMessage(msg.content) : msg.content}
                   </div>
                 </div>
               ))}
               
-              {/* Typing Indicator */}
               {isLoading && (
                 <div className="flex justify-start">
                   <div className="bg-white border border-gray-100 rounded-2xl rounded-bl-sm px-4 py-3 shadow-sm flex items-center gap-1">
@@ -110,7 +158,6 @@ export default function Chatbot() {
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Input Area */}
             <form onSubmit={handleSend} className="p-3 bg-white border-t border-gray-100 flex gap-2">
               <input
                 type="text"
@@ -131,7 +178,6 @@ export default function Chatbot() {
         )}
       </AnimatePresence>
 
-      {/* THE FLOATING ACTION BUTTON */}
       <motion.button
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}

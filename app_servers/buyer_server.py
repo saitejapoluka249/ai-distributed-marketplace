@@ -172,41 +172,100 @@ def logout():
 def ai_chat():
     data = request.json
     user_msg = data.get('message', '')
+    sess_id = data.get('sess_id', '') 
     
     if not user_msg:
         return jsonify({"status": "FAIL", "message": "No message provided."})
         
     try:
-        # --- 1. THE "RETRIEVAL" PHASE ---
-        # Fetch the real, live inventory from your gRPC database
         resp = prod_stub.SearchItems(ecommerce_pb2.SearchRequest(
             category=0, keywords='', min_price=0.0, max_price=9999999.0, page=1, limit=50
         ))
-        
-        # Clean up the data into a readable text format for the AI (strip out the image URLs)
-        # It will look like: "ID: 1.1 | Apple MacBook Pro... | $2499.0 | Available: 45"
         inventory_list = "\n".join([item.split('| IMG:')[0].strip() for item in resp.item_lines])
-        # --------------------------------
         
-        # Initialize the client
-        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        username = "Guest"
+        order_context = "User is not logged in. Ask them to log in to track orders."
+        cart_context = "User is not logged in. Cannot see cart."
+        promo_context = "No active promos available."
         
-        # --- 2. THE "AUGMENTATION" PHASE ---
-        system_prompt = f"""You are 'Nova', the elite AI Shopping Assistant for DistributedStore. 
-        You help customers find products, give gift recommendations, and answer questions. 
-        
-        CRITICAL RULE: You can ONLY recommend products that exist in the "Live Store Inventory" below. 
-        If a user asks for something we do not have, politely apologize and recommend the closest alternative FROM THE INVENTORY.
-        Do NOT invent products. Do NOT recommend global products outside of this list.
-        
-        Live Store Inventory:
-        {inventory_list}
-        
-        Keep your responses concise, highly professional, and friendly. Use emojis occasionally.
-        Format your responses cleanly. If you mention a product, include its price and tell them it is in stock."""
-        # -----------------------------------
+        if sess_id:
+            valid = cust_stub.ValidateSession(ecommerce_pb2.SessionRequest(sess_id=sess_id))
+            if valid.success:
+                username = valid.username
+                
+                order_resp = cust_stub.GetBuyerOrders(ecommerce_pb2.UserRequest(query=username))
+                if order_resp.orders:
+                    recent_orders = []
+                    for o in order_resp.orders[-3:]: 
+                        recent_orders.append(f"Order ID: {o.order_id[:8]} | Item: {o.item_name} | Qty: {o.qty} | Status: {o.status}")
+                    order_context = "USER'S RECENT ORDERS:\n" + "\n".join(recent_orders)
+                else:
+                    order_context = f"{username} has no recent orders."
 
-        # --- 3. THE "GENERATION" PHASE ---
+                cart_resp = cust_stub.GetCart(ecommerce_pb2.SessionRequest(sess_id=sess_id))
+                if cart_resp.success and cart_resp.cart_json:
+                    cart_items = json.loads(cart_resp.cart_json)
+                    if cart_items:
+                        cart_details = []
+                        valid_promos = [] 
+                        
+                        for c_item in cart_items:
+                            p_resp = prod_stub.GetItem(ecommerce_pb2.IDRequest(id=c_item['id']))
+                            if p_resp.success:
+                                cat_id = c_item['id'].split('.')[0]
+                                cart_details.append(f"- {p_resp.name} (Item ID: {c_item['id']}, Category: {cat_id}, Qty: {c_item['qty']}, Price: ${p_resp.price})")
+                                
+                                promo_resp = prod_stub.GetSellerPromos(ecommerce_pb2.UserRequest(query=p_resp.seller))
+                                for p in promo_resp.promos:
+                                    if p.target_type == 'ITEM' and p.target_val == c_item['id']:
+                                        valid_promos.append(f"Code: '{p.code}' ({p.discount_pct}% off {p_resp.name})")
+                                    elif p.target_type == 'CATEGORY' and p.target_val == cat_id:
+                                        valid_promos.append(f"Code: '{p.code}' ({p.discount_pct}% off {p_resp.name})")
+                        
+                        cart_context = "USER'S CURRENT CART CONTENTS:\n" + "\n".join(cart_details)
+                        
+                        valid_promos = list(set(valid_promos))
+                        
+                        if valid_promos:
+                            promo_context = "PROMO CODES 100% VALID FOR THIS CART:\n" + "\n".join(valid_promos)
+                        else:
+                            promo_context = "There are currently NO valid promo codes for the items in the user's cart."
+                    else:
+                        cart_context = "User's cart is currently empty."
+                else:
+                    cart_context = "User's cart is currently empty."
+
+        system_prompt = f"""You are 'Nova', the elite AI Shopping Assistant for DistributedStore.
+You help customers find products, give recommendations, track orders, and provide discounts.
+
+CURRENT USER: {username}
+
+ORDER HISTORY:
+{order_context}
+
+CURRENT CART CONTENTS:
+{cart_context}
+
+{promo_context}
+
+LIVE STORE INVENTORY:
+{inventory_list}
+
+ACTIONABLE CAPABILITIES (CRITICAL):
+If the user wants to buy a specific item from the inventory, you MUST generate a direct Add to Cart button in the chat.
+To do this, output exactly this string format anywhere in your response:
+[ADD_CART:item_id:Item Name:Price]
+Example: "I recommend the iPhone. [ADD_CART:2.1:Apple iPhone 15 Pro Max:1199.00]"
+
+RULES:
+1. ONLY recommend items from the Live Store Inventory.
+2. If asked about their cart, use the CURRENT CART CONTENTS to tell them exactly what they have inside it.
+3. If asked about orders, use the ORDER HISTORY provided.
+4. PROMOS: If the user asks for a discount, check the "PROMO CODES 100% VALID FOR THIS CART" section. If there are codes, give them to the user. If it says there are NO valid codes, politely tell the user there are no active discounts for their specific items. Do NOT invent codes.
+5. CHECKOUT BOUNDARY: You CANNOT process payments, complete checkouts, or place orders. NEVER say "Let's proceed to purchase". If the user wants to pay, tell them to close the chat and click the "Cart" button at the top of their screen to securely checkout.
+6. Always be concise, helpful, and use emojis."""
+
+        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
@@ -222,6 +281,148 @@ def ai_chat():
         print(f"OpenAI Error: {e}")
         return jsonify({"status": "FAIL", "message": "AI services are currently busy. Please try again."})
     
+@app.route('/search/ai', methods=['GET'])
+def ai_search():
+    query = request.args.get('query', '')
+    if not query:
+        return jsonify({"status": "FAIL", "message": "No search query provided."})
+
+    try:
+        resp = prod_stub.SearchItems(ecommerce_pb2.SearchRequest(
+            category=0, keywords='', min_price=0.0, max_price=9999999.0, page=1, limit=100
+        ))
+        
+        inventory_text = ""
+        for item_line in resp.item_lines:
+            clean_line = item_line.split('| IMG:')[0].strip()
+            inventory_text += f"{clean_line}\n"
+
+        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        system_prompt = f"""You are an advanced semantic search engine for an e-commerce store.
+The user will describe a scenario, intent, or "vibe".
+Read our active inventory below:
+
+{inventory_text}
+
+TASK: Find the items that best match the user's scenario. 
+RETURN FORMAT: You must return ONLY a comma-separated list of the Item IDs (e.g., 2.1, 14.1, 21.1). 
+Do NOT return any other text, explanations, or words. If absolutely nothing matches, return NONE."""
+
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"Search Query: {query}"}
+            ]
+        )
+        
+        ai_reply = response.choices[0].message.content.strip()
+        
+        if ai_reply == "NONE" or not ai_reply:
+            return jsonify({"status": "SUCCESS", "items": [], "current_page": 1, "total_pages": 1})
+
+        import re
+        matched_ids = re.findall(r'\d+\.\d+', ai_reply)
+        
+        matched_ids = list(set(matched_ids))
+        
+        matched_item_lines = []
+        for iid in matched_ids:
+            p_resp = prod_stub.GetItem(ecommerce_pb2.IDRequest(id=iid))
+            if p_resp.success:
+                price_str = "{:.2f}".format(float(p_resp.price)) 
+                qty_str = str(int(p_resp.quantity))
+                img_str = p_resp.image_url.strip() if p_resp.image_url else ""
+                
+                line = f"ID: {p_resp.item_id} | {p_resp.name} | ${price_str} | Available: {qty_str} | IMG: {img_str}"
+                matched_item_lines.append(line)
+
+        return jsonify({
+            "status": "SUCCESS", 
+            "items": matched_item_lines,
+            "current_page": 1,
+            "total_pages": 1
+        })
+
+    except Exception as e:
+        print(f"AI Search Error: {e}")
+        return jsonify({"status": "FAIL", "message": "AI Search is currently unavailable."})
+    
+@app.route('/seller/summary', methods=['GET'])
+def get_seller_summary():
+    seller_id = request.args.get('seller_id')
+    if not seller_id:
+        return jsonify({"status": "FAIL", "message": "Missing seller_id"})
+
+    try:
+        resp = prod_stub.GetSellerStats(ecommerce_pb2.UserRequest(query=seller_id))
+        
+        if not resp.reviews or len(resp.reviews) == 0:
+            return jsonify({"status": "SUCCESS", "summary": "This seller has no reviews yet."})
+            
+        reviews_text = ""
+        for r in resp.reviews:
+            reviews_text += f"- {r.stars} Stars: {r.text}\n"
+            
+        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        system_prompt = """You are an expert e-commerce analyst. 
+        Read the following customer reviews about a SELLER (not a product) and write a concise, one-paragraph summary (maximum 3 sentences). 
+        Highlight the main pros and cons of buying from this specific seller (e.g., shipping speed, customer service, packaging). 
+        Start your response exactly with 'Customers say this seller '."""
+        
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"Reviews for Seller {seller_id}:\n{reviews_text}"}
+            ]
+        )
+        
+        return jsonify({"status": "SUCCESS", "summary": response.choices[0].message.content})
+        
+    except Exception as e:
+        return jsonify({"status": "FAIL", "message": "Could not generate AI summary."})
+    
+
+@app.route('/item/summary', methods=['GET'])
+def get_item_summary():
+    item_id = request.args.get('item_id')
+    if not item_id:
+        return jsonify({"status": "FAIL", "message": "Missing item_id"})
+
+    try:
+        resp = prod_stub.GetItem(ecommerce_pb2.IDRequest(id=item_id))
+        
+        if not resp.success:
+            return jsonify({"status": "FAIL", "message": "Item not found"})
+            
+        if not resp.reviews or len(resp.reviews) == 0:
+            return jsonify({"status": "SUCCESS", "summary": "There are no reviews for this item yet."})
+            
+        reviews_text = ""
+        for r in resp.reviews:
+            reviews_text += f"- {r.stars} Stars: {r.text}\n"
+            
+        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        system_prompt = """You are an expert e-commerce product analyst. 
+        Read the following customer reviews and write a concise, one-paragraph summary (maximum 3 sentences). 
+        Highlight the main pros and cons that customers agree on. 
+        Start your response exactly with 'Customers say '."""
+        
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"Reviews for {resp.name}:\n{reviews_text}"}
+            ]
+        )
+        
+        summary = response.choices[0].message.content
+        return jsonify({"status": "SUCCESS", "summary": summary})
+        
+    except Exception as e:
+        print(f"OpenAI Summary Error: {e}")
+        return jsonify({"status": "FAIL", "message": "Could not generate AI summary."})
     
 @app.route('/search', methods=['GET'])
 def search():

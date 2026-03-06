@@ -8,10 +8,13 @@ export default function SellerModal({ isOpen, onClose, sellerId }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  const [aiSummary, setAiSummary] = useState('');
+  const [loadingSummary, setLoadingSummary] = useState(false);
   useEffect(() => {
     if (isOpen && sellerId) {
       setLoading(true);
       setError('');
+      setAiSummary(''); 
       
       const fetchSeller = async () => {
         try {
@@ -19,6 +22,22 @@ export default function SellerModal({ isOpen, onClose, sellerId }) {
           const data = await response.json();
           if (data.status === 'SUCCESS') {
             setSellerData(data);
+            
+            if (data.reviews && data.reviews.length > 0) {
+              setLoadingSummary(true);
+              try {
+                const summaryRes = await fetch(`${BASE_URL}/seller/summary?seller_id=${sellerId}`);
+                const summaryData = await summaryRes.json();
+                if (summaryData.status === 'SUCCESS') {
+                  setAiSummary(summaryData.summary);
+                }
+              } catch (e) {
+                console.error("Failed to load seller AI summary");
+              } finally {
+                setLoadingSummary(false);
+              }
+            }
+
           } else {
             setError(data.message || 'Failed to load seller details.');
           }
@@ -96,6 +115,25 @@ export default function SellerModal({ isOpen, onClose, sellerId }) {
                       </div>
                     </div>
                   </div>
+
+                  {/* --- NEW: AI SELLER INSIGHTS --- */}
+                  {sellerData.reviews && sellerData.reviews.length > 0 && (
+                    <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-100 rounded-2xl p-5 mb-2 shadow-sm">
+                      <div className="flex items-center gap-2 mb-2">
+                        <svg className="w-5 h-5 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                        <h4 className="font-black text-purple-900 tracking-tight">AI Seller Insights</h4>
+                      </div>
+                      {loadingSummary ? (
+                        <div className="flex items-center gap-2 text-purple-400 text-sm font-medium animate-pulse">
+                          Generating summary based on {sellerData.reviews.length} reviews...
+                        </div>
+                      ) : (
+                        <p className="text-sm text-purple-900/80 leading-relaxed font-medium">
+                          {aiSummary}
+                        </p>
+                      )}
+                    </div>
+                  )}
 
                   <div>
                     <h3 className="text-lg font-bold text-gray-900 mb-4">Customer Feedback</h3>
