@@ -5,6 +5,9 @@ const SELLER_URL = 'http://localhost:7001';
 export default function SellerInventory({ sessionId }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [isAiLoading, setIsAiLoading] = useState(false);
   
   // Modal states
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -121,6 +124,38 @@ export default function SellerInventory({ sessionId }) {
     } catch (err) { alert("Connection error."); }
   };
 
+  const handleAiAutofill = async () => {
+    if (!aiPrompt.trim()) {
+      alert("Please describe the item first!");
+      return;
+    }
+    setIsAiLoading(true);
+    try {
+      const response = await fetch(`${SELLER_URL}/ai/autofill`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: aiPrompt })
+      });
+      const data = await response.json();
+      
+      if (data.status === 'SUCCESS') {
+        setNewItem(prev => ({
+          ...prev,
+          name: data.name,
+          category: data.category,
+          keywords: data.keywords,
+          price: data.price
+        }));
+      } else {
+        alert("AI could not generate suggestions.");
+      }
+    } catch (err) {
+      alert("Error connecting to AI service.");
+    } finally {
+      setIsAiLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Top Control Bar */}
@@ -200,6 +235,28 @@ export default function SellerInventory({ sessionId }) {
             </div>
             
             <form onSubmit={handleAddItem} className="p-6 overflow-y-auto space-y-4">
+              <div className="bg-gradient-to-r from-teal-50 to-emerald-50 p-4 rounded-xl border border-teal-100 shadow-sm mb-4">
+                <label className="block text-xs font-black text-teal-800 uppercase mb-2 flex items-center gap-1">
+                  ✨ AI Co-Pilot Auto-Fill
+                </label>
+                <div className="flex gap-2">
+                  <input 
+                    type="text" 
+                    placeholder="Describe what you're selling (e.g. 'Used PS5 with two controllers')" 
+                    value={aiPrompt}
+                    onChange={(e) => setAiPrompt(e.target.value)}
+                    className="flex-1 border-0 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-400 outline-none shadow-sm"
+                  />
+                  <button 
+                    type="button" 
+                    onClick={handleAiAutofill}
+                    disabled={isAiLoading}
+                    className="bg-teal-600 hover:bg-teal-700 disabled:bg-teal-300 text-white font-bold px-4 py-2 rounded-lg transition-colors text-sm shadow-sm whitespace-nowrap"
+                  >
+                    {isAiLoading ? 'Thinking...' : 'Auto-Fill Form'}
+                  </button>
+                </div>
+              </div>
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Product Name</label>
                 <input required type="text" className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-teal-500 outline-none" value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} placeholder="e.g. Wireless Mouse" />

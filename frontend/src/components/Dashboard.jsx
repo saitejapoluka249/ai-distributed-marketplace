@@ -51,7 +51,6 @@ export default function Dashboard({ sessionId }) {
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
 
-  // --- NEW: AI Vibe Search Toggle ---
   const [isAiSearch, setIsAiSearch] = useState(false);
 
   const fetchItems = async (targetPage = 1, targetCategory = category, currentKeywords = keywords) => {
@@ -101,7 +100,6 @@ export default function Dashboard({ sessionId }) {
 
   // --- LIVE SEARCH DEBOUNCE EFFECT ---
   useEffect(() => {
-    // We disable live auto-complete if the user is using the AI Search feature
     if (keywords.trim().length < 2 || isAiSearch) {
       setSuggestions([]);
       setShowSuggestions(false);
@@ -136,21 +134,18 @@ export default function Dashboard({ sessionId }) {
     return () => clearTimeout(timeoutId);
   }, [keywords, category, isAiSearch]);
 
-  // --- NEW: THE AI-INTEGRATED SEARCH HANDLER ---
   const handleSearch = async (e) => {
     if (e) e.preventDefault();
-    setShowSuggestions(false); // Close suggestions if they hit enter
+    setShowSuggestions(false); 
     setLoading(true);
     setError('');
 
     try {
       let url = '';
       
-      // If AI Search is toggled ON, hit the new AI endpoint
       if (isAiSearch && keywords.trim() !== '') {
         url = `${BASE_URL}/search/ai?query=${encodeURIComponent(keywords)}`;
       } else {
-        // Otherwise, do the standard SQL category/keyword search
         url = `${BASE_URL}/search?category=${category}&keywords=${encodeURIComponent(keywords)}&page=1&limit=12`;
       }
 
@@ -158,7 +153,6 @@ export default function Dashboard({ sessionId }) {
       const data = await response.json();
       
       if (data.status === 'SUCCESS') {
-        // We parse the data exactly like the normal fetchItems function does
         const parsedItems = data.items.map(itemStr => {
           const match = itemStr.match(/ID:\s*([\d\.]+)\s*\|\s*(.*?)\s*\|\s*\$([\d\.]+)\s*\|\s*Available:\s*(\d+)(?:\s*\|\s*IMG:\s*(.*))?/i);
           if (match) {

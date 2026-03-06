@@ -7,6 +7,8 @@ from dotenv import load_dotenv
 from flask_cors import CORS
 import smtplib
 from email.message import EmailMessage
+from openai import OpenAI
+import json
 
 load_dotenv()
 
@@ -77,6 +79,48 @@ def send_status_update_email(to_email, order_id, new_status):
         print(f"✅ STATUS UPDATE EMAIL SENT TO: {to_email}")
     except Exception as e:
         print(f"❌ Failed to send email: {e}")
+
+
+@app.route('/ai/autofill', methods=['POST'])
+def ai_autofill():
+    data = request.json
+    prompt = data.get('prompt', '')
+    
+    if not prompt:
+        return jsonify({"status": "FAIL", "message": "No prompt provided."})
+
+    try:
+        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        
+        system_instruction = """You are an expert e-commerce seller assistant. 
+        The user will give you a brief description of an item they want to sell.
+        You must return a raw JSON object (without markdown code blocks like ```json) with the following exact keys:
+        - "name": A catchy, SEO-optimized title for the product.
+        - "category": An integer from 1 to 26 representing the best fit category. (1=Electronics, 2=Phones, 3=TV, 4=Shoes, 5=Cameras, 6=Audio, 7=Home, 8=Furniture, 9=Tools, 10=Garden, 11=Pets, 12=Mens Clothing, 13=Womens Clothing, 14=Video Games, 15=Watches, 16=Luggage, 17=Beauty, 18=Health, 19=Baby, 20=Toys, 21=Sports, 22=Automotive, 23=Books, 24=Music, 25=Office, 26=Grocery).
+        - "keywords": A comma-separated string of 5 to 7 highly searchable keywords.
+        - "price": A float representing a reasonable estimated market price (e.g., 49.99)."""
+
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system_instruction},
+                {"role": "user", "content": f"I want to sell: {prompt}"}
+            ]
+        )
+        
+        ai_reply = response.choices[0].message.content.strip()
+        
+        # Strip out markdown formatting if the AI disobeys instructions
+        if ai_reply.startswith("```json"):
+            ai_reply = ai_reply.replace("```json\n", "").replace("```", "")
+            
+        parsed_data = json.loads(ai_reply)
+        parsed_data["status"] = "SUCCESS"
+        return jsonify(parsed_data)
+        
+    except Exception as e:
+        print(f"AI Auto-Fill Error: {e}")
+        return jsonify({"status": "FAIL", "message": "Failed to generate AI suggestions."})
 
 @app.route('/create_account', methods=['POST'])
 def create_account():
