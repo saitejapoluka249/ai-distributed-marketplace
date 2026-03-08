@@ -85,15 +85,15 @@ You must start the servers from the bottom tier up. Open a separate terminal for
 **1. Start the Database Tier (gRPC):**
 
 ```bash
-python database_tier/customer_db.py
-python database_tier/product_db.py
+python3 -m database_tier.customer_db
+python3 -m database_tier.product_db
 
 ```
 
 **2. Start the Financial Tier (SOAP):**
 
 ```bash
-python financial_service.py
+python3 financial_service.py
 
 ```
 
@@ -101,8 +101,8 @@ python financial_service.py
 _(Note: Ensure you have added your Google App Password to the `SENDER_PASSWORD` variable in both servers if you wish to test live email routing)._
 
 ```bash
-python app_servers/buyer_server.py
-python app_servers/seller_server.py
+python3 -m app_servers.buyer_server
+python3 -m app_servers.seller_server
 
 ```
 
